@@ -1,10 +1,13 @@
 use crossbeam::channel::{select_biased, Receiver, Sender};
 use packet_forge::PacketForge;
+use rocket::fs::{relative, FileServer};
+use rocket::response::stream::{Event, EventStream};
 use rocket::{self, Build, Ignite, Rocket, State};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
+use tokio::time::interval;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::Packet;
@@ -47,6 +50,10 @@ impl Client {
         Client {
             state: Arc::new(RwLock::new(state)),
         }
+    }
+
+    pub fn get_id(&self) -> NodeId {
+        self.state.read().unwrap().id
     }
 
     fn command_dispatcher(&self, command: &DroneCommand) {
@@ -118,10 +125,11 @@ impl Client {
     }
 
     #[must_use]
-    pub fn configure(client: Client) -> Rocket<Build> {
+    fn configure(client: Client) -> Rocket<Build> {
         rocket::build()
             .manage(client)
-            .mount("/", routes![client_info])
+            .mount("/", routes![client_info, client_events])
+            .mount("/", FileServer::from(relative!("static")))
     }
 
     /// Launch the Rocket app
@@ -138,4 +146,18 @@ impl Client {
 fn client_info(client: &State<Client>) -> String {
     let state = client.state.read().unwrap();
     format!("Client ID: {}", state.id)
+}
+
+#[get("/events")]
+fn client_events(client: &State<Client>) -> EventStream![] {
+    let client_state = client.state.clone();
+
+    EventStream! {
+        let mut interval = interval(Duration::from_secs(1));
+        loop {
+            let id = client_state.read().unwrap().id;
+            yield Event::data(id.to_string());
+            interval.tick().await;
+        }
+    }
 }
