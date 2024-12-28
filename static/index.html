@@ -1,25 +1,23 @@
-<!-- <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
     <head>
         <meta charset="utf-8" />
         <title>Rocket Rooms</title>
-        <link rel="stylesheet" href="/reset.css" />
-        <link rel="stylesheet" href="/style.css" />
-        <script src="/js/script.js" charset="utf-8" defer></script>
+        <link href="https://vjs.zencdn.net/8.0.4/video-js.css" rel="stylesheet" />
+        <script type="module" src="/js/index.js" charset="utf-8" defer></script>
     </head>
     <body>
         <h1>Client ID: <span id="client-id">Loading...</span></h1>
-    </body>
-</html> -->
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Rocket + TypeScript</title>
-    </head>
-    <body>
-        <canvas id="canvas" width="500" height="500"></canvas>
-        <script src="/js/graphics.js"></script>
+        <div>
+            <video id="my-video" class="video-js" controls preload="auto" width="640" height="360" data-setup='{}'>
+                <p class="vjs-no-js">
+                    To view this video, please enable JavaScript and consider upgrading to a web browser that supports
+                    HTML5 video.
+                </p>
+
+                <source src="//vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
+            </video>
+        </div>
     </body>
 </html>
+<!DOCTYPE html>

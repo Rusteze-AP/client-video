@@ -3,15 +3,19 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc",
-    "watch": "tsc --watch"
+    "dev": "vite",
+    "build": "vite build",
+    "watch": "vite build --watch"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "@types/video.js": "^7.3.58",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "video.js": "^8.21.0",
+    "vite": "^6.0.6"
   }
 }
