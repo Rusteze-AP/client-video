@@ -1,12 +1,16 @@
+use bytes::{Bytes, BytesMut};
 use crossbeam::channel::{select_biased, Receiver, Sender};
 use packet_forge::PacketForge;
 use rocket::fs::{relative, FileServer};
 use rocket::response::stream::{Event, EventStream};
 use rocket::{self, Build, Ignite, Rocket, State};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
+use std::path::Path;
 use std::sync::{Arc, RwLock};
-use std::thread;
 use std::time::Duration;
+use std::{io, thread};
 use tokio::time::interval;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
@@ -105,7 +109,7 @@ impl Client {
                     }
                     recv(state_guard.packet_recv) -> msg => {
                         if let Ok(msg) = msg {
-                            println!("Client {} received a message: {:?}", state_guard.id, msg);
+                            // println!("Client {} received a message: {:?}", state_guard.id, msg);
                             if state_guard.id == 20 {
                                 state_guard.id = 69;
                             } else {
@@ -128,7 +132,7 @@ impl Client {
     fn configure(client: Client) -> Rocket<Build> {
         rocket::build()
             .manage(client)
-            .mount("/", routes![client_info, client_events])
+            .mount("/", routes![client_info, client_events, video_stream])
             .mount("/", FileServer::from(relative!("static")))
     }
 
@@ -150,6 +154,7 @@ fn client_info(client: &State<Client>) -> String {
 
 #[get("/events")]
 fn client_events(client: &State<Client>) -> EventStream![] {
+    println!("Starting event stream");
     let client_state = client.state.clone();
 
     EventStream! {
@@ -160,4 +165,92 @@ fn client_events(client: &State<Client>) -> EventStream![] {
             interval.tick().await;
         }
     }
+}
+
+#[get("/video-stream")]
+fn video_stream() -> EventStream![] {
+    EventStream! {
+        let mut video_chunks = get_video_chunks();
+        while let Some(chunk) = video_chunks.next() {
+            // Encode the chunk as base64 if needed
+            let encoded_chunk = base64::encode(&chunk);
+            yield Event::data(encoded_chunk);
+        }
+    }
+}
+
+pub struct VideoChunker {
+    file: File,
+    chunk_size: usize,
+    position: u64,
+    file_size: u64,
+}
+
+impl VideoChunker {
+    pub fn new(path: impl AsRef<Path>, chunk_size: usize) -> io::Result<Self> {
+        let file = File::open(path)?;
+        let file_size = file.metadata()?.len();
+
+        Ok(VideoChunker {
+            file,
+            chunk_size,
+            position: 0,
+            file_size,
+        })
+    }
+
+    pub fn next_chunk(&mut self) -> io::Result<Option<Bytes>> {
+        if self.position >= self.file_size {
+            return Ok(None);
+        }
+
+        let mut buffer = BytesMut::with_capacity(self.chunk_size);
+        buffer.resize(self.chunk_size, 0);
+
+        self.file.seek(SeekFrom::Start(self.position))?;
+        let bytes_read = self.file.read(&mut buffer)?;
+
+        if bytes_read == 0 {
+            return Ok(None);
+        }
+
+        buffer.truncate(bytes_read);
+        self.position += bytes_read as u64;
+
+        Ok(Some(buffer.freeze()))
+    }
+
+    pub fn reset(&mut self) -> io::Result<()> {
+        self.position = 0;
+        self.file.seek(SeekFrom::Start(0))?;
+        Ok(())
+    }
+}
+
+// Generator function for the EventStream
+pub fn get_video_chunks() -> impl Iterator<Item = Bytes> {
+    struct ChunkIterator {
+        chunker: VideoChunker,
+    }
+
+    impl Iterator for ChunkIterator {
+        type Item = Bytes;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match self.chunker.next_chunk() {
+                Ok(Some(chunk)) => Some(chunk),
+                _ => {
+                    // Reset the chunker and return None to end the stream
+                    let _ = self.chunker.reset();
+                    None
+                }
+            }
+        }
+    }
+
+    // Create the chunker with a 1MB chunk size
+    let chunker = VideoChunker::new("../client/static/videos/dancing_pirate.mp4", 1024 * 1024)
+        .expect("Failed to create video chunker");
+
+    ChunkIterator { chunker }
 }
