@@ -1,5 +1,5 @@
 use crossbeam::channel::{Receiver, Sender, TryRecvError};
-use packet_forge::{PacketForge, TextMessage};
+use packet_forge::{FileMetadata, PacketForge, SubscribeClient};
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
@@ -57,9 +57,21 @@ impl Client {
                 }
             }
 
-            let text_msg =
-                TextMessage::new("c".repeat(128), String::from("20"), String::from("30"));
-            let packets = self.packet_forge.disassemble(&text_msg, vec![20, 1, 30]);
+            let subscribe_msg = SubscribeClient::new(
+                1,
+                packet_forge::ClientType::Audio,
+                vec![(
+                    FileMetadata {
+                        file_size: 100,
+                        file_chunks: 10,
+                        file_name: "test".to_string(),
+                    },
+                    "hash".to_string(),
+                )],
+            );
+            let packets = self
+                .packet_forge
+                .disassemble(subscribe_msg.clone(), vec![20, 1, 30]);
             if let Ok(packets) = packets {
                 for packet in packets {
                     // Send packet to server
@@ -75,7 +87,7 @@ impl Client {
                     }
                 }
             } else {
-                eprintln!("Error disassembling message: {text_msg:?}");
+                eprintln!("Error disassembling message: {subscribe_msg:?}");
             }
         }
     }
