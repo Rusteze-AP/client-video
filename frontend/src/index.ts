@@ -1,5 +1,23 @@
 import videojs from "video.js";
 
+function req_video() {
+    document.getElementById("req-video")?.addEventListener("click", async () => {
+        try {
+            const response = await fetch("/req-video/dancing_pirate.mp4", {
+                method: "GET",
+            });
+
+            if (response.ok) {
+                console.log("Message sent successfully:", await response.text());
+            } else {
+                console.error("Failed to send message:", response.status);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+    });
+}
+
 function init() {
     // Handle client ID updates
     const clientEvtSource = new EventSource("/events");
@@ -9,6 +27,8 @@ function init() {
             clientIdElement.textContent = event.data;
         }
     };
+
+    req_video();
 
     const elementId = "my-video";
     const videoElement = document.getElementById(elementId) as HTMLVideoElement | null;

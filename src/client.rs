@@ -1,20 +1,19 @@
-use bytes::{Bytes, BytesMut};
-use crossbeam::channel::{select_biased, Receiver, Sender};
-use packet_forge::PacketForge;
+use base64::{engine::general_purpose, Engine};
+use bytes::Bytes;
+use crossbeam::channel::{Receiver, Sender, TryRecvError};
+use packet_forge::{ChunkRequest, Index, MessageType, PacketForge};
 use rocket::fs::{relative, FileServer};
 use rocket::response::stream::{Event, EventStream};
 use rocket::{self, Build, Ignite, Rocket, State};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
+use std::thread;
 use std::time::Duration;
-use std::{io, thread};
+use tokio::sync::broadcast;
 use tokio::time::interval;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
-use wg_internal::packet::Packet;
+use wg_internal::packet::{Fragment, Packet, PacketType};
 
 #[derive(Debug)]
 pub struct ClientState {
@@ -24,7 +23,9 @@ pub struct ClientState {
     packet_recv: Receiver<Packet>,
     senders: HashMap<NodeId, Sender<Packet>>,
     packet_forge: PacketForge,
+    packets_map: HashMap<u64, Vec<Fragment>>,
     terminated: bool,
+    video_sender: Option<broadcast::Sender<Bytes>>,
 }
 
 #[derive(Debug, Clone)]
@@ -48,7 +49,9 @@ impl Client {
             packet_recv: receiver,
             senders,
             packet_forge: PacketForge::new(),
+            packets_map: HashMap::new(),
             terminated: false,
+            video_sender: None,
         };
 
         Client {
@@ -60,9 +63,24 @@ impl Client {
         self.state.read().unwrap().id
     }
 
-    fn command_dispatcher(&self, command: &DroneCommand) {
+    fn request_video(&self, video_name: &str) {
         let mut state = self.state.write().unwrap();
+        let msg = ChunkRequest::new(video_name.to_string(), Index::All);
+        let packets = state
+            .packet_forge
+            .disassemble(msg, vec![20, 1, 30])
+            .unwrap();
+        let sender = state.senders.get(&1).unwrap();
+        for packet in packets {
+            sender.send(packet).unwrap();
+        }
+    }
 
+    fn command_dispatcher(
+        &self,
+        state: &mut RwLockWriteGuard<'_, ClientState>,
+        command: &DroneCommand,
+    ) {
         match command {
             DroneCommand::Crash => {
                 state.terminated = true;
@@ -82,13 +100,61 @@ impl Client {
         }
     }
 
+    fn handle_messages(&self, state: &mut RwLockWriteGuard<'_, ClientState>, message: MessageType) {
+        match message {
+            MessageType::SubscribeClient(content) => {
+                println!(
+                    "Client {} received a SubscribeClient message: {:?}",
+                    state.id, content
+                );
+            }
+            MessageType::ChunkResponse(content) => {
+                // Send data to event stream
+                if let Some(sender) = &state.video_sender {
+                    let _ = sender.send(content.chunk_data);
+                }
+            }
+            _ => {
+                println!("Client {} received an unimplemented message", state.id);
+            }
+        }
+    }
+
+    fn handle_packets(&self, state: &mut RwLockWriteGuard<'_, ClientState>, packet: Packet) {
+        let session_id = packet.session_id;
+        match packet.pack_type {
+            PacketType::MsgFragment(frag) => {
+                // Add fragment to packets_map
+                state.packets_map.entry(session_id).or_default().push(frag);
+                let fragments = state.packets_map.get(&session_id).unwrap();
+                let total_fragments = fragments[0].total_n_fragments;
+
+                // If all fragments are received, assemble the message
+                if fragments.len() as u64 == total_fragments {
+                    let assembled = match state.packet_forge.assemble_dynamic(fragments.clone()) {
+                        Ok(message) => message,
+                        Err(e) => panic!("Error assembling: {e}"),
+                    };
+                    state.packets_map.remove(&session_id);
+                    self.handle_messages(state, assembled);
+                }
+            }
+            _ => {
+                println!(
+                    "Client {} received an unimplemented packet: {:?}",
+                    state.id, packet
+                );
+            }
+        }
+    }
+
     #[must_use]
     pub fn start_message_processing(self) -> thread::JoinHandle<()> {
         let state = self.state.clone();
 
         thread::spawn(move || {
             loop {
-                thread::sleep(Duration::from_secs(1));
+                // thread::sleep(Duration::from_secs(1));
 
                 // Get mutable access to state
                 let mut state_guard = state.write().unwrap();
@@ -97,29 +163,34 @@ impl Client {
                     break;
                 }
 
-                select_biased! {
-                    recv(state_guard.controller_recv) -> command => {
-                        if let Ok(command) = command {
-                            println!("Client {} received a command: {:?}", state_guard.id, command);
-                            self.command_dispatcher(&command);
-                        } else {
-                            println!("Client {}, SC disconnected", state_guard.id);
-                            break;
-                        }
+                match state_guard.controller_recv.try_recv() {
+                    Ok(command) => {
+                        self.command_dispatcher(&mut state_guard, &command);
                     }
-                    recv(state_guard.packet_recv) -> msg => {
-                        if let Ok(msg) = msg {
-                            // println!("Client {} received a message: {:?}", state_guard.id, msg);
-                            if state_guard.id == 20 {
-                                state_guard.id = 69;
-                            } else {
-                                state_guard.id = 20;
-                            }
+                    Err(TryRecvError::Empty) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "Error receiving command for server {}: {:?}",
+                            state_guard.id, e
+                        );
+                    }
+                }
+
+                match state_guard.packet_recv.try_recv() {
+                    Ok(packet) => {
+                        if state_guard.id == 20 {
+                            state_guard.id = 69;
                         } else {
-                            eprintln!(
-                                "Error receiving message for client {}", state_guard.id);
-                            break;
+                            state_guard.id = 20;
                         }
+                        self.handle_packets(&mut state_guard, packet);
+                    }
+                    Err(TryRecvError::Empty) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "Error receiving message for server {}: {:?}",
+                            state_guard.id, e
+                        );
                     }
                 }
 
@@ -132,7 +203,10 @@ impl Client {
     fn configure(client: Client) -> Rocket<Build> {
         rocket::build()
             .manage(client)
-            .mount("/", routes![client_info, client_events, video_stream])
+            .mount(
+                "/",
+                routes![client_info, client_events, video_stream, request_video],
+            )
             .mount("/", FileServer::from(relative!("static")))
     }
 
@@ -146,6 +220,11 @@ impl Client {
     }
 }
 
+#[get("/req-video/<video_name>")]
+fn request_video(client: &State<Client>, video_name: &str) {
+    client.request_video(video_name);
+}
+
 #[get("/client-info")]
 fn client_info(client: &State<Client>) -> String {
     let state = client.state.read().unwrap();
@@ -154,7 +233,6 @@ fn client_info(client: &State<Client>) -> String {
 
 #[get("/events")]
 fn client_events(client: &State<Client>) -> EventStream![] {
-    println!("Starting event stream");
     let client_state = client.state.clone();
 
     EventStream! {
@@ -168,89 +246,24 @@ fn client_events(client: &State<Client>) -> EventStream![] {
 }
 
 #[get("/video-stream")]
-fn video_stream() -> EventStream![] {
+async fn video_stream(client: &State<Client>) -> EventStream![] {
+    let (sender, _) = broadcast::channel::<Bytes>(1024);
+    {
+        let mut state = client.state.write().unwrap();
+        state.video_sender = Some(sender.clone());
+    }
+
+    let mut receiver = sender.subscribe();
+
     EventStream! {
-        let mut video_chunks = get_video_chunks();
-        while let Some(chunk) = video_chunks.next() {
-            // Encode the chunk as base64 if needed
-            let encoded_chunk = base64::encode(&chunk);
-            yield Event::data(encoded_chunk);
-        }
-    }
-}
-
-pub struct VideoChunker {
-    file: File,
-    chunk_size: usize,
-    position: u64,
-    file_size: u64,
-}
-
-impl VideoChunker {
-    pub fn new(path: impl AsRef<Path>, chunk_size: usize) -> io::Result<Self> {
-        let file = File::open(path)?;
-        let file_size = file.metadata()?.len();
-
-        Ok(VideoChunker {
-            file,
-            chunk_size,
-            position: 0,
-            file_size,
-        })
-    }
-
-    pub fn next_chunk(&mut self) -> io::Result<Option<Bytes>> {
-        if self.position >= self.file_size {
-            return Ok(None);
-        }
-
-        let mut buffer = BytesMut::with_capacity(self.chunk_size);
-        buffer.resize(self.chunk_size, 0);
-
-        self.file.seek(SeekFrom::Start(self.position))?;
-        let bytes_read = self.file.read(&mut buffer)?;
-
-        if bytes_read == 0 {
-            return Ok(None);
-        }
-
-        buffer.truncate(bytes_read);
-        self.position += bytes_read as u64;
-
-        Ok(Some(buffer.freeze()))
-    }
-
-    pub fn reset(&mut self) -> io::Result<()> {
-        self.position = 0;
-        self.file.seek(SeekFrom::Start(0))?;
-        Ok(())
-    }
-}
-
-// Generator function for the EventStream
-pub fn get_video_chunks() -> impl Iterator<Item = Bytes> {
-    struct ChunkIterator {
-        chunker: VideoChunker,
-    }
-
-    impl Iterator for ChunkIterator {
-        type Item = Bytes;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            match self.chunker.next_chunk() {
-                Ok(Some(chunk)) => Some(chunk),
-                _ => {
-                    // Reset the chunker and return None to end the stream
-                    let _ = self.chunker.reset();
-                    None
+        loop {
+            match receiver.recv().await {
+                Ok(chunk) => {
+                    let encoded =  general_purpose::STANDARD.encode(&chunk);
+                    yield Event::data(encoded);
                 }
+                Err(_) => break,
             }
         }
     }
-
-    // Create the chunker with a 1MB chunk size
-    let chunker = VideoChunker::new("../client/static/videos/dancing_pirate.mp4", 1024 * 1024)
-        .expect("Failed to create video chunker");
-
-    ChunkIterator { chunker }
 }
