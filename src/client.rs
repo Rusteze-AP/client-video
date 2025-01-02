@@ -59,6 +59,12 @@ impl Client {
         }
     }
 
+    /// Get the ID of the client
+    /// # Errors
+    /// May create deadlock if the `RwLock` is poisoned
+    /// # Panics
+    /// This function might panic when called if the lock is already held by the current thread.
+    #[must_use]
     pub fn get_id(&self) -> NodeId {
         self.state.read().unwrap().id
     }
@@ -149,7 +155,7 @@ impl Client {
     }
 
     #[must_use]
-    pub fn start_message_processing(self) -> thread::JoinHandle<()> {
+    fn start_message_processing(self) -> thread::JoinHandle<()> {
         let state = self.state.clone();
 
         thread::spawn(move || {
@@ -246,7 +252,7 @@ fn client_events(client: &State<Client>) -> EventStream![] {
 }
 
 #[get("/video-stream")]
-async fn video_stream(client: &State<Client>) -> EventStream![] {
+fn video_stream(client: &State<Client>) -> EventStream![] {
     let (sender, _) = broadcast::channel::<Bytes>(1024);
     {
         let mut state = client.state.write().unwrap();
@@ -256,14 +262,9 @@ async fn video_stream(client: &State<Client>) -> EventStream![] {
     let mut receiver = sender.subscribe();
 
     EventStream! {
-        loop {
-            match receiver.recv().await {
-                Ok(chunk) => {
-                    let encoded =  general_purpose::STANDARD.encode(&chunk);
-                    yield Event::data(encoded);
-                }
-                Err(_) => break,
-            }
+        while let Ok(chunk) = receiver.recv().await {
+            let encoded =  general_purpose::STANDARD.encode(&chunk);
+            yield Event::data(encoded);
         }
     }
 }
