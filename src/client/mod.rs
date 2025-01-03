@@ -8,14 +8,16 @@ use packet_forge::PacketForge;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Ignite, Rocket};
 use routes::{client_events, client_info, request_video, video_stream};
+use routing_handler::RoutingHandler;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
 
-#[derive(Debug)]
+pub(crate) type StateGuardT<'a> = RwLockWriteGuard<'a, ClientState>;
+
 pub struct ClientState {
     id: NodeId,
     controller_send: Sender<DroneEvent>,
@@ -26,9 +28,10 @@ pub struct ClientState {
     packets_map: HashMap<u64, Vec<Fragment>>,
     terminated: bool,
     video_sender: Option<broadcast::Sender<Bytes>>,
+    routing_handler: RoutingHandler,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Client {
     state: Arc<RwLock<ClientState>>,
 }
@@ -52,6 +55,7 @@ impl Client {
             packets_map: HashMap::new(),
             terminated: false,
             video_sender: None,
+            routing_handler: RoutingHandler::new(),
         };
 
         Client {

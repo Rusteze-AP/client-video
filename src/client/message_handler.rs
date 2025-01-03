@@ -1,18 +1,13 @@
 use crossbeam::channel::TryRecvError;
-use packet_forge::MessageType;
-use std::sync::RwLockWriteGuard;
+use packet_forge::{MessageType, SessionIdT};
 use std::thread;
 use wg_internal::controller::DroneCommand;
-use wg_internal::packet::{Packet, PacketType};
+use wg_internal::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, PacketType};
 
-use super::{Client, ClientState};
+use super::{Client, StateGuardT};
 
 impl Client {
-    fn command_dispatcher(
-        &self,
-        state: &mut RwLockWriteGuard<'_, ClientState>,
-        command: &DroneCommand,
-    ) {
+    fn command_dispatcher(&self, state: &mut StateGuardT, command: &DroneCommand) {
         match command {
             DroneCommand::Crash => {
                 state.terminated = true;
@@ -32,7 +27,7 @@ impl Client {
         }
     }
 
-    fn handle_messages(&self, state: &mut RwLockWriteGuard<'_, ClientState>, message: MessageType) {
+    fn handle_messages(&self, state: &mut StateGuardT, message: MessageType) {
         match message {
             MessageType::SubscribeClient(content) => {
                 println!(
@@ -52,31 +47,56 @@ impl Client {
         }
     }
 
-    fn handle_packets(&self, state: &mut RwLockWriteGuard<'_, ClientState>, packet: Packet) {
+    fn handle_fragment(
+        &self,
+        state_guard: &mut StateGuardT,
+        frag: Fragment,
+        session_id: SessionIdT,
+    ) {
+        // Add fragment to packets_map
+        state_guard
+            .packets_map
+            .entry(session_id)
+            .or_default()
+            .push(frag);
+        let fragments = state_guard.packets_map.get(&session_id).unwrap();
+        let total_fragments = fragments[0].total_n_fragments;
+
+        // If all fragments are received, assemble the message
+        if fragments.len() as u64 == total_fragments {
+            let assembled = match state_guard.packet_forge.assemble_dynamic(fragments.clone()) {
+                Ok(message) => message,
+                Err(e) => panic!("Error assembling: {e}"),
+            };
+            state_guard.packets_map.remove(&session_id);
+            self.handle_messages(state_guard, assembled);
+        }
+    }
+
+    fn handle_ack(&self, state_guard: &mut StateGuardT, ack: Ack) {
+        unimplemented!("Ack")
+    }
+
+    fn handle_nack(&self, state_guard: &mut StateGuardT, nack: Nack) {
+        unimplemented!("Nack")
+    }
+
+    fn handle_flood_req(&self, state_guard: &mut StateGuardT, req: FloodRequest) {
+        unimplemented!("FloodRequest")
+    }
+
+    fn handle_flood_res(&self, state_guard: &mut StateGuardT, res: FloodResponse) {
+        unimplemented!("FloodResponse")
+    }
+
+    fn handle_packets(&self, state_guard: &mut StateGuardT, packet: Packet) {
         let session_id = packet.session_id;
         match packet.pack_type {
-            PacketType::MsgFragment(frag) => {
-                // Add fragment to packets_map
-                state.packets_map.entry(session_id).or_default().push(frag);
-                let fragments = state.packets_map.get(&session_id).unwrap();
-                let total_fragments = fragments[0].total_n_fragments;
-
-                // If all fragments are received, assemble the message
-                if fragments.len() as u64 == total_fragments {
-                    let assembled = match state.packet_forge.assemble_dynamic(fragments.clone()) {
-                        Ok(message) => message,
-                        Err(e) => panic!("Error assembling: {e}"),
-                    };
-                    state.packets_map.remove(&session_id);
-                    self.handle_messages(state, assembled);
-                }
-            }
-            _ => {
-                println!(
-                    "Client {} received an unimplemented packet: {:?}",
-                    state.id, packet
-                );
-            }
+            PacketType::MsgFragment(frag) => self.handle_fragment(state_guard, frag, session_id),
+            PacketType::Ack(ack) => self.handle_ack(state_guard, ack),
+            PacketType::Nack(nack) => self.handle_nack(state_guard, nack),
+            PacketType::FloodRequest(flood) => self.handle_flood_req(state_guard, flood),
+            PacketType::FloodResponse(flood) => self.handle_flood_res(state_guard, flood),
         }
     }
 
@@ -86,8 +106,6 @@ impl Client {
 
         thread::spawn(move || {
             loop {
-                // thread::sleep(Duration::from_secs(1));
-
                 // Get mutable access to state
                 let mut state_guard = state.write().unwrap();
 
