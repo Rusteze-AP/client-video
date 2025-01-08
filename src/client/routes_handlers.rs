@@ -1,4 +1,5 @@
 use packet_forge::{ChunkRequest, Index};
+use wg_internal::network::SourceRoutingHeader;
 
 use super::Client;
 
@@ -10,8 +11,10 @@ impl Client {
         let hops = vec![20, 1, 30];
         let dest = hops[1];
 
+        let srh = SourceRoutingHeader::new(hops, 1);
+
         // Disassemble the message into packets
-        let packets = state.packet_forge.disassemble(msg, hops);
+        let packets = state.packet_forge.disassemble(msg, srh);
         if packets.is_err() {
             eprintln!("Client {}, error: disassembling failed", state.id);
             return;

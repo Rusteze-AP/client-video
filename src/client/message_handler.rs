@@ -73,11 +73,11 @@ impl Client {
         }
     }
 
-    fn handle_ack(&self, state_guard: &mut StateGuardT, ack: Ack) {
+    fn handle_ack(&self, state_guard: &mut StateGuardT, ack: Ack, session_id: SessionIdT) {
         unimplemented!("Ack")
     }
 
-    fn handle_nack(&self, state_guard: &mut StateGuardT, nack: Nack) {
+    fn handle_nack(&self, state_guard: &mut StateGuardT, nack: Nack, session_id: SessionIdT) {
         unimplemented!("Nack")
     }
 
@@ -93,8 +93,8 @@ impl Client {
         let session_id = packet.session_id;
         match packet.pack_type {
             PacketType::MsgFragment(frag) => self.handle_fragment(state_guard, frag, session_id),
-            PacketType::Ack(ack) => self.handle_ack(state_guard, ack),
-            PacketType::Nack(nack) => self.handle_nack(state_guard, nack),
+            PacketType::Ack(ack) => self.handle_ack(state_guard, ack, session_id),
+            PacketType::Nack(nack) => self.handle_nack(state_guard, nack, session_id),
             PacketType::FloodRequest(flood) => self.handle_flood_req(state_guard, flood),
             PacketType::FloodResponse(flood) => self.handle_flood_res(state_guard, flood),
         }
