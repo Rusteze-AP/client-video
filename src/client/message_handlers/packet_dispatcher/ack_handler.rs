@@ -7,7 +7,7 @@ impl Client {
     pub(crate) fn handle_ack(
         &self,
         state_guard: &mut StateGuardT,
-        ack: Ack,
+        ack: &Ack,
         session_id: SessionIdT,
     ) {
         // Remove packet from history

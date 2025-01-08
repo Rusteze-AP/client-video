@@ -40,7 +40,7 @@ impl Client {
     pub(crate) fn handle_nack(
         &self,
         state_guard: &mut StateGuardT,
-        nack: Nack,
+        nack: &Nack,
         session_id: SessionIdT,
     ) {
         // Retrieve the packet that generated the nack
