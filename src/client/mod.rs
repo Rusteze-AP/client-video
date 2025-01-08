@@ -6,7 +6,7 @@ use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use packet_forge::PacketForge;
 use rocket::fs::{relative, FileServer};
-use rocket::{Build, Ignite, Rocket};
+use rocket::{Build, Config, Ignite, Rocket};
 use routes::{client_events, client_info, request_video, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
@@ -75,7 +75,13 @@ impl Client {
 
     #[must_use]
     fn configure(client: Client) -> Rocket<Build> {
-        rocket::build()
+        // Config rocket to use a different port for each client
+        let config = Config {
+            port: 8000 + client.get_id() as u16,
+            ..Config::default()
+        };
+
+        rocket::custom(&config)
             .manage(client)
             .mount(
                 "/",
