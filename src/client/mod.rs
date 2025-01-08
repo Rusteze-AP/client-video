@@ -1,4 +1,4 @@
-mod message_handler;
+mod message_handlers;
 mod routes;
 mod routes_handlers;
 mod utils;

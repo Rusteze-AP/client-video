@@ -1,35 +1,13 @@
-use crossbeam::channel::TryRecvError;
 use packet_forge::{MessageType, SessionIdT};
-use std::thread;
-use wg_internal::controller::DroneCommand;
 use wg_internal::packet::{
     Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, Packet, PacketType,
 };
 
-use super::utils::send_packet;
+use crate::client::utils::send_packet;
+
 use super::{Client, StateGuardT};
 
 impl Client {
-    fn command_dispatcher(&self, state: &mut StateGuardT, command: &DroneCommand) {
-        match command {
-            DroneCommand::Crash => {
-                state.terminated = true;
-            }
-            DroneCommand::SetPacketDropRate(_) => {
-                eprintln!(
-                    "Client {}, error: received a SetPacketDropRate command",
-                    state.id
-                );
-            }
-            _ => {
-                eprintln!(
-                    "Client {}, error: received an unknown command: {:?}",
-                    state.id, command
-                );
-            }
-        }
-    }
-
     fn handle_messages(&self, state_guard: &mut StateGuardT, message: MessageType) {
         match message {
             MessageType::SubscribeClient(content) => {
@@ -168,7 +146,7 @@ impl Client {
         state_guard.routing_handler.update_graph(flood);
     }
 
-    fn packet_dispatcher(&self, state_guard: &mut StateGuardT, packet: Packet) {
+    pub(crate) fn packet_dispatcher(&self, state_guard: &mut StateGuardT, packet: Packet) {
         let session_id = packet.session_id;
         match packet.pack_type {
             PacketType::MsgFragment(frag) => self.handle_fragment(state_guard, frag, session_id),
@@ -177,45 +155,5 @@ impl Client {
             PacketType::FloodRequest(flood) => self.handle_flood_req(state_guard, flood),
             PacketType::FloodResponse(flood) => self.handle_flood_res(state_guard, flood),
         }
-    }
-
-    #[must_use]
-    pub(crate) fn start_message_processing(self) -> thread::JoinHandle<()> {
-        let state = self.state.clone();
-
-        thread::spawn(move || {
-            loop {
-                // Get mutable access to state
-                let mut state_guard = state.write().unwrap();
-
-                if state_guard.terminated {
-                    break;
-                }
-
-                match state_guard.controller_recv.try_recv() {
-                    Ok(command) => self.command_dispatcher(&mut state_guard, &command),
-                    Err(TryRecvError::Empty) => {}
-                    Err(e) => {
-                        eprintln!(
-                            "Error receiving command for server {}: {:?}",
-                            state_guard.id, e
-                        );
-                    }
-                }
-
-                match state_guard.packet_recv.try_recv() {
-                    Ok(packet) => self.packet_dispatcher(&mut state_guard, packet),
-                    Err(TryRecvError::Empty) => {}
-                    Err(e) => {
-                        eprintln!(
-                            "Error receiving message for server {}: {:?}",
-                            state_guard.id, e
-                        );
-                    }
-                }
-
-                // RwLock is automatically released here when state_guard goes out of scope
-            }
-        })
     }
 }
