@@ -1,40 +1,41 @@
 use packet_forge::{ChunkRequest, Index};
 use wg_internal::network::SourceRoutingHeader;
 
-use super::Client;
+use super::{utils::send_packet, Client};
 
 impl Client {
     pub(crate) fn request_video(&self, video_name: &str) {
-        let mut state = self.state.write().unwrap();
-
         let msg = ChunkRequest::new(video_name.to_string(), Index::All);
         let hops = vec![20, 1, 30];
         let dest = hops[1];
-
         let srh = SourceRoutingHeader::new(hops, 1);
 
-        // Disassemble the message into packets
-        let packets = state.packet_forge.disassemble(msg, srh);
-        if packets.is_err() {
-            eprintln!("Client {}, error: disassembling failed", state.id);
-            return;
-        }
-        let packets = packets.unwrap();
+        let (packets, sender, client_id) = {
+            let mut state_guard = self.state.write().unwrap();
 
-        drop(state);
-        let state = self.state.read().unwrap();
+            // Disassemble the message into packets
+            let Ok(packets) = state_guard.packet_forge.disassemble(msg, srh) else {
+                eprintln!("Client {}, error: disassembling failed", state_guard.id);
+                return;
+            };
 
-        // Get sender
-        let sender = state.senders.get(&dest);
-        if sender.is_none() {
-            eprintln!("Client {}, error: sender {} not found", state.id, dest);
-            return;
-        }
-        let sender = sender.unwrap();
+            // Get sender
+            let sender = if let Some(s) = state_guard.senders.get(&dest) {
+                s.clone()
+            } else {
+                eprintln!(
+                    "Client {}, error: sender {} not found",
+                    state_guard.id, dest
+                );
+                return;
+            };
 
-        // Send packets
+            (packets, sender, state_guard.id)
+        };
+
         for packet in packets {
-            sender.send(packet).unwrap();
+            let mut state_guard = self.state.write().unwrap();
+            send_packet(&mut state_guard, &sender, packet, client_id);
         }
     }
 }

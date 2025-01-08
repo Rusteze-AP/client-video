@@ -2,8 +2,11 @@ use crossbeam::channel::TryRecvError;
 use packet_forge::{MessageType, SessionIdT};
 use std::thread;
 use wg_internal::controller::DroneCommand;
-use wg_internal::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, PacketType};
+use wg_internal::packet::{
+    Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, Packet, PacketType,
+};
 
+use super::utils::send_packet;
 use super::{Client, StateGuardT};
 
 impl Client {
@@ -27,22 +30,25 @@ impl Client {
         }
     }
 
-    fn handle_messages(&self, state: &mut StateGuardT, message: MessageType) {
+    fn handle_messages(&self, state_guard: &mut StateGuardT, message: MessageType) {
         match message {
             MessageType::SubscribeClient(content) => {
                 println!(
                     "Client {} received a SubscribeClient message: {:?}",
-                    state.id, content
+                    state_guard.id, content
                 );
             }
             MessageType::ChunkResponse(content) => {
                 // Send data to event stream
-                if let Some(sender) = &state.video_sender {
+                if let Some(sender) = &state_guard.video_sender {
                     let _ = sender.send(content.chunk_data);
                 }
             }
             _ => {
-                println!("Client {} received an unimplemented message", state.id);
+                println!(
+                    "Client {} received an unimplemented message",
+                    state_guard.id
+                );
             }
         }
     }
@@ -73,23 +79,96 @@ impl Client {
         }
     }
 
+    fn retransmit_packet(&self, state_guard: &mut StateGuardT, mut packet: Packet) {
+        let dest = packet.routing_header.hops[packet.routing_header.hops.len()];
+
+        // Retrieve new best path from server to client otherwise return
+        let client_id = state_guard.id;
+        let Some(srh) = state_guard.routing_handler.best_path(client_id, dest) else {
+            eprintln!(
+                "Client {}, error: best path not found from {} to {}",
+                state_guard.id, client_id, dest
+            );
+            return;
+        };
+
+        let next_hop = srh.hops[srh.hop_index];
+        // Assign the new SourceRoutingHeader
+        packet.routing_header = srh;
+
+        // Get sender
+        let sender = if let Some(s) = state_guard.senders.get(&next_hop) {
+            s.clone()
+        } else {
+            eprintln!(
+                "Client {}, error: sender {} not found",
+                state_guard.id, next_hop
+            );
+            return;
+        };
+
+        send_packet(state_guard, &sender, packet, state_guard.id);
+    }
+
     fn handle_ack(&self, state_guard: &mut StateGuardT, ack: Ack, session_id: SessionIdT) {
-        unimplemented!("Ack")
+        // Remove packet from history
+        let res = state_guard
+            .packets_history
+            .remove(&(ack.fragment_index, session_id));
+        if res.is_none() {
+            eprintln!(
+                "Client {}, failed to remove packet_history with id ({}, {})",
+                state_guard.id, ack.fragment_index, session_id
+            );
+        }
     }
 
     fn handle_nack(&self, state_guard: &mut StateGuardT, nack: Nack, session_id: SessionIdT) {
-        unimplemented!("Nack")
+        // Retrieve the packet that generated the nack
+        let Some(packet) = state_guard
+            .packets_history
+            .get(&(nack.fragment_index, session_id))
+            .cloned()
+        else {
+            eprintln!(
+                "Client {}, failed to retrieve packet_history with id ({}, {})",
+                state_guard.id, nack.fragment_index, session_id
+            );
+            return;
+        };
+
+        match nack.nack_type {
+            NackType::Dropped => self.retransmit_packet(state_guard, packet),
+            NackType::DestinationIsDrone => {
+                eprintln!(
+                    "Client {}, received a Nack with DestinationIsDrone",
+                    state_guard.id
+                );
+            }
+            NackType::ErrorInRouting(id) => {
+                eprintln!(
+                    "Client {}, received a Nack with ErrorInRouting: {}",
+                    state_guard.id, id
+                );
+            }
+            NackType::UnexpectedRecipient(id) => {
+                eprintln!(
+                    "Client {}, received a Nack with UnexpectedRecipient: {}",
+                    state_guard.id, id
+                );
+            }
+        }
     }
 
     fn handle_flood_req(&self, state_guard: &mut StateGuardT, req: FloodRequest) {
         unimplemented!("FloodRequest")
     }
 
-    fn handle_flood_res(&self, state_guard: &mut StateGuardT, res: FloodResponse) {
-        unimplemented!("FloodResponse")
+    fn handle_flood_res(&self, state_guard: &mut StateGuardT, flood: FloodResponse) {
+        state_guard.routing_handler.update_graph(flood);
     }
 
-    fn handle_packets(&self, state_guard: &mut StateGuardT, packet: Packet) {
+    fn packet_dispatcher(&self, state_guard: &mut StateGuardT, packet: Packet) {
         let session_id = packet.session_id;
         match packet.pack_type {
             PacketType::MsgFragment(frag) => self.handle_fragment(state_guard, frag, session_id),
@@ -114,9 +193,7 @@ impl Client {
                 }
 
                 match state_guard.controller_recv.try_recv() {
-                    Ok(command) => {
-                        self.command_dispatcher(&mut state_guard, &command);
-                    }
+                    Ok(command) => self.command_dispatcher(&mut state_guard, &command),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         eprintln!(
@@ -127,14 +204,7 @@ impl Client {
                 }
 
                 match state_guard.packet_recv.try_recv() {
-                    Ok(packet) => {
-                        if state_guard.id == 20 {
-                            state_guard.id = 69;
-                        } else {
-                            state_guard.id = 20;
-                        }
-                        self.handle_packets(&mut state_guard, packet);
-                    }
+                    Ok(packet) => self.packet_dispatcher(&mut state_guard, packet),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         eprintln!(

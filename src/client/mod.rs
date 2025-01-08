@@ -1,10 +1,11 @@
 mod message_handler;
 mod routes;
 mod routes_handlers;
+mod utils;
 
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
-use packet_forge::PacketForge;
+use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Ignite, Rocket};
 use routes::{client_events, client_info, request_video, video_stream};
@@ -28,7 +29,8 @@ pub struct ClientState {
     packets_map: HashMap<u64, Vec<Fragment>>,
     terminated: bool,
     video_sender: Option<broadcast::Sender<Bytes>>,
-    routing_handler: RoutingHandler,
+    routing_handler: RoutingHandler, // Topology graph
+    packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
 }
 
 #[derive(Clone)]
@@ -56,6 +58,7 @@ impl Client {
             terminated: false,
             video_sender: None,
             routing_handler: RoutingHandler::new(),
+            packets_history: HashMap::new(),
         };
 
         Client {
@@ -77,7 +80,7 @@ impl Client {
     fn configure(client: Client) -> Rocket<Build> {
         // Config rocket to use a different port for each client
         let config = Config {
-            port: 8000 + client.get_id() as u16,
+            port: 8000 + u16::from(client.get_id()),
             ..Config::default()
         };
 
