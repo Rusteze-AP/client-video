@@ -10,7 +10,7 @@ impl Client {
         let dest = hops[1];
         let srh = SourceRoutingHeader::new(hops, 1);
 
-        let (packets, sender, client_id) = {
+        let (packets, sender) = {
             let mut state_guard = self.state.write().unwrap();
 
             // Disassemble the message into packets
@@ -30,12 +30,15 @@ impl Client {
                 return;
             };
 
-            (packets, sender, state_guard.id)
+            (packets, sender)
         };
 
         for packet in packets {
             let mut state_guard = self.state.write().unwrap();
-            send_packet(&mut state_guard, &sender, packet, client_id);
+            let res = send_packet(&mut state_guard, &sender, &packet);
+            if let Err(err) = res {
+                state_guard.logger.log_error(err.as_str());
+            }
         }
     }
 }

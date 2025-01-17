@@ -34,7 +34,11 @@ impl Client {
             return;
         };
 
-        send_packet(state_guard, &sender, packet, state_guard.id);
+        let res = send_packet(state_guard, &sender, &packet);
+
+        if let Err(err) = res {
+            state_guard.logger.log_error(err.as_str());
+        }
     }
 
     pub(crate) fn handle_nack(

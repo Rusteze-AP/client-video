@@ -15,6 +15,7 @@ tokio = { version = "1", features = ["full"] }
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = [
     "debug",
 ] }
+logger = { git = "https://github.com/Rusteze-AP/logger.git", branch = "main" }
 # packet_forge = { git = "ssh://git@github.com/Rusteze-AP/packetForge.git", branch = "main" }
 
 packet_forge = { path = "../packet_forge" }

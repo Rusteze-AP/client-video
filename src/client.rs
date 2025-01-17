@@ -5,6 +5,7 @@ mod utils;
 
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
+use logger::{LogLevel, Logger};
 use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Ignite, Rocket};
@@ -31,6 +32,8 @@ pub(crate) struct ClientState {
     video_sender: Option<broadcast::Sender<Bytes>>,
     routing_handler: RoutingHandler, // Topology graph
     packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
+    logger: Logger,
+    flood_id: u64,
 }
 
 #[derive(Clone)]
@@ -59,6 +62,8 @@ impl Client {
             video_sender: None,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
+            logger: Logger::new(LogLevel::None as u8, false, "RustezeDrone".to_string()),
+            flood_id: 0,
         };
 
         Client {
