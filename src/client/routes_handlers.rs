@@ -5,7 +5,7 @@ use super::{utils::send_packet, Client};
 
 impl Client {
     pub(crate) fn request_video(&self, video_name: &str) {
-        let msg = ChunkRequest::new(video_name.to_string(), Index::All);
+        let msg = ChunkRequest::new(self.get_id(), video_name.to_string(), Index::All);
         let hops = vec![20, 1, 30];
         let dest = hops[1];
         let srh = SourceRoutingHeader::new(hops, 1);

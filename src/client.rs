@@ -17,9 +17,9 @@ use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
 
-pub(crate) type StateGuardT<'a> = RwLockWriteGuard<'a, ClientState>;
+type StateGuardT<'a> = RwLockWriteGuard<'a, ClientState>;
 
-pub struct ClientState {
+pub(crate) struct ClientState {
     id: NodeId,
     controller_send: Sender<DroneEvent>,
     controller_recv: Receiver<DroneCommand>,
