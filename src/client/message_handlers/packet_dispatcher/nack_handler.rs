@@ -6,7 +6,7 @@ use crate::client::utils::send_packet;
 use super::{Client, StateGuardT};
 
 impl Client {
-    fn retransmit_packet(&self, state_guard: &mut StateGuardT, mut packet: Packet) {
+    fn retransmit_packet(state_guard: &mut StateGuardT, mut packet: Packet) {
         let dest = packet.routing_header.hops[packet.routing_header.hops.len()];
 
         // Retrieve new best path from server to client otherwise return
@@ -41,12 +41,7 @@ impl Client {
         }
     }
 
-    pub(crate) fn handle_nack(
-        &self,
-        state_guard: &mut StateGuardT,
-        nack: &Nack,
-        session_id: SessionIdT,
-    ) {
+    pub(crate) fn handle_nack(state_guard: &mut StateGuardT, nack: &Nack, session_id: SessionIdT) {
         // Retrieve the packet that generated the nack
         let Some(packet) = state_guard
             .packets_history
@@ -61,7 +56,7 @@ impl Client {
         };
 
         match nack.nack_type {
-            NackType::Dropped => self.retransmit_packet(state_guard, packet),
+            NackType::Dropped => Self::retransmit_packet(state_guard, packet),
             NackType::DestinationIsDrone => {
                 eprintln!(
                     "Client {}, received a Nack with DestinationIsDrone",

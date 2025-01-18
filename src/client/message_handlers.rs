@@ -21,7 +21,7 @@ impl Client {
                 }
 
                 match state_guard.controller_recv.try_recv() {
-                    Ok(command) => self.command_dispatcher(&mut state_guard, &command),
+                    Ok(command) => Self::command_dispatcher(&mut state_guard, &command),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         eprintln!(
@@ -32,7 +32,7 @@ impl Client {
                 }
 
                 match state_guard.packet_recv.try_recv() {
-                    Ok(packet) => self.packet_dispatcher(&mut state_guard, packet),
+                    Ok(packet) => Self::packet_dispatcher(&mut state_guard, packet),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         eprintln!(

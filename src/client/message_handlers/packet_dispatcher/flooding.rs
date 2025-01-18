@@ -9,11 +9,11 @@ use crate::client::utils::send_packet;
 use super::{Client, StateGuardT};
 
 impl Client {
-    pub(crate) fn handle_flood_res(&self, state_guard: &mut StateGuardT, flood: FloodResponse) {
+    pub(crate) fn handle_flood_res(state_guard: &mut StateGuardT, flood: FloodResponse) {
         state_guard.routing_handler.update_graph(flood);
     }
 
-    pub(crate) fn get_flood_id(&self, state_guard: &mut StateGuardT) -> u64 {
+    pub(crate) fn get_flood_id(state_guard: &mut StateGuardT) -> u64 {
         state_guard.flood_id += 1;
         state_guard.flood_id
     }
@@ -54,7 +54,6 @@ impl Client {
     }
 
     fn send_flood_response(
-        &self,
         state_guard: &mut StateGuardT,
         dest: NodeId,
         packet: &Packet,
@@ -88,9 +87,9 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn handle_flood_req(&self, state_guard: &mut StateGuardT, message: &FloodRequest) {
+    pub(crate) fn handle_flood_req(state_guard: &mut StateGuardT, message: &FloodRequest) {
         let (dest, packet) = Self::build_flood_response(message);
-        let res = self.send_flood_response(state_guard, dest, &packet);
+        let res = Self::send_flood_response(state_guard, dest, &packet);
 
         if let Err(msg) = res {
             state_guard.logger.log_error(msg.as_str());

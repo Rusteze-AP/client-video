@@ -8,7 +8,7 @@ use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
 use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
-use rocket::{Build, Config, Ignite, Rocket};
+use rocket::{Build, Config, Rocket};
 use routes::{client_events, client_info, request_video, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
@@ -102,8 +102,32 @@ impl Client {
     /// This function will block the current thread until the Rocket app is shut down
     /// # Errors
     /// If the Rocket app fails to launch
-    pub async fn run(self) -> Result<Rocket<Ignite>, rocket::Error> {
-        let _processing_handle = self.clone().start_message_processing();
-        Self::configure(self).launch().await
+    /// # Panics
+    /// This function might panic when called if the lock is already held by the current thread.
+    pub async fn run(self) {
+        let processing_handle = self.clone().start_message_processing();
+        let state = self.state.clone();
+
+        // Launch rocket in a separate task
+        let rocket = Self::configure(self).launch();
+
+        // Monitor termination flag in a separate task
+        let termination_handle = tokio::spawn(async move {
+            loop {
+                if state.read().unwrap().terminated {
+                    // Wait for processing thread to complete
+                    let _ = processing_handle.join();
+                    break;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        });
+
+        // Run both tasks concurrently
+        tokio::select! {
+            _ = rocket => {},
+            _ = termination_handle => {},
+        }
+        println!("[CLIENT] Terminated");
     }
 }

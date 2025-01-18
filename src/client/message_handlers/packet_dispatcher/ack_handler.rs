@@ -4,12 +4,7 @@ use wg_internal::packet::Ack;
 use super::{Client, StateGuardT};
 
 impl Client {
-    pub(crate) fn handle_ack(
-        &self,
-        state_guard: &mut StateGuardT,
-        ack: &Ack,
-        session_id: SessionIdT,
-    ) {
+    pub(crate) fn handle_ack(state_guard: &mut StateGuardT, ack: &Ack, session_id: SessionIdT) {
         // Remove packet from history
         let res = state_guard
             .packets_history

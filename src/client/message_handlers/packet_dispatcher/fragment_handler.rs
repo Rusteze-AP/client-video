@@ -4,7 +4,7 @@ use wg_internal::packet::Fragment;
 use super::{Client, StateGuardT};
 
 impl Client {
-    fn handle_messages(&self, state_guard: &mut StateGuardT, message: MessageType) {
+    fn handle_messages(state_guard: &mut StateGuardT, message: MessageType) {
         match message {
             MessageType::SubscribeClient(content) => {
                 println!(
@@ -28,7 +28,6 @@ impl Client {
     }
 
     pub(crate) fn handle_fragment(
-        &self,
         state_guard: &mut StateGuardT,
         frag: Fragment,
         session_id: SessionIdT,
@@ -49,7 +48,7 @@ impl Client {
                 Err(e) => panic!("Error assembling: {e}"),
             };
             state_guard.packets_map.remove(&session_id);
-            self.handle_messages(state_guard, assembled);
+            Self::handle_messages(state_guard, assembled);
         }
     }
 }
