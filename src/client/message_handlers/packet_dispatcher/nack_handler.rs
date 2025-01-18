@@ -1,12 +1,12 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::{Nack, NackType, Packet};
 
-use crate::client::utils::send_packet;
+use crate::client::utils::send_packet::send_packet;
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    fn retransmit_packet(state_guard: &mut StateGuardT, mut packet: Packet) {
+    fn retransmit_packet(state_guard: &mut StateGuardWriteT, mut packet: Packet) {
         let dest = packet.routing_header.hops[packet.routing_header.hops.len()];
 
         // Retrieve new best path from server to client otherwise return
@@ -41,7 +41,7 @@ impl Client {
         }
     }
 
-    pub(crate) fn handle_nack(state_guard: &mut StateGuardT, nack: &Nack, session_id: SessionIdT) {
+    pub(crate) fn handle_nack(state_guard: &mut StateGuardWriteT, nack: &Nack, session_id: SessionIdT) {
         // Retrieve the packet that generated the nack
         let Some(packet) = state_guard
             .packets_history

@@ -4,42 +4,14 @@ use wg_internal::{
     packet::{FloodRequest, FloodResponse, Packet},
 };
 
-use crate::client::utils::send_packet;
+use crate::client::utils::send_packet::send_packet;
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    pub(crate) fn handle_flood_res(state_guard: &mut StateGuardT, flood: FloodResponse) {
+    pub(crate) fn handle_flood_res(state_guard: &mut StateGuardWriteT, flood: FloodResponse) {
         state_guard.routing_handler.update_graph(flood);
     }
-
-    pub(crate) fn get_flood_id(state_guard: &mut StateGuardT) -> u64 {
-        state_guard.flood_id += 1;
-        state_guard.flood_id
-    }
-
-    // pub(crate) fn init_flood_request(&mut self) {
-    //     let flood_req = FloodRequest {
-    //         flood_id: self.get_flood_id(),
-    //         initiator_id: self.id,
-    //         path_trace: vec![(self.id, NodeType::Server)],
-    //     };
-    //     for (id, sender) in &self.packet_send {
-    //         let packet = Packet::new_flood_request(
-    //             SourceRoutingHeader::new(vec![], 0),
-    //             self.packet_forge.get_session_id(),
-    //             flood_req.clone(),
-    //         );
-    //         if let Err(err) = send_packet(sender, &packet) {
-    //             self.logger.log_error(&format!(
-    //                 "[SERVER-{}][FLOODING] Sending to [DRONE-{}]: {}",
-    //                 self.id, id, err
-    //             ));
-    //         }
-    //         let packet_str = get_packet_type(&packet.pack_type);
-    //         self.event_dispatcher(&packet, &packet_str);
-    //     }
-    // }
 
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
         let mut packet = flood_req.generate_response(1); // Note: returns with hop_index = 0;
@@ -54,7 +26,7 @@ impl Client {
     }
 
     fn send_flood_response(
-        state_guard: &mut StateGuardT,
+        state_guard: &mut StateGuardWriteT,
         dest: NodeId,
         packet: &Packet,
     ) -> Result<(), String> {
@@ -87,7 +59,7 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn handle_flood_req(state_guard: &mut StateGuardT, message: &FloodRequest) {
+    pub(crate) fn handle_flood_req(state_guard: &mut StateGuardWriteT, message: &FloodRequest) {
         let (dest, packet) = Self::build_flood_response(message);
         let res = Self::send_flood_response(state_guard, dest, &packet);
 

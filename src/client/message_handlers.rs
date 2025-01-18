@@ -4,12 +4,20 @@ mod packet_dispatcher;
 use crossbeam::channel::TryRecvError;
 use std::thread;
 
-use super::{Client, StateGuardT};
+use super::{utils::start_flooding::init_flood_request, Client, StateGuardWriteT, StateT};
 
 impl Client {
+    fn start_flooding(state: StateT) {
+        thread::spawn(move || {
+            init_flood_request(&state);
+        });
+    }
+
     #[must_use]
     pub(crate) fn start_message_processing(self) -> thread::JoinHandle<()> {
         let state = self.state.clone();
+
+        Self::start_flooding(state.clone());
 
         thread::spawn(move || {
             loop {

@@ -5,10 +5,10 @@ mod nack_handler;
 
 use wg_internal::packet::{Packet, PacketType};
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    pub(crate) fn packet_dispatcher(state_guard: &mut StateGuardT, packet: Packet) {
+    pub(crate) fn packet_dispatcher(state_guard: &mut StateGuardWriteT, packet: Packet) {
         let session_id = packet.session_id;
         match packet.pack_type {
             PacketType::MsgFragment(frag) => Self::handle_fragment(state_guard, frag, session_id),

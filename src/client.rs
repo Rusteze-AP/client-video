@@ -2,6 +2,7 @@ mod message_handlers;
 mod routes;
 mod routes_handlers;
 mod utils;
+// mod send_packet;
 
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
@@ -12,13 +13,15 @@ use rocket::{Build, Config, Rocket};
 use routes::{client_events, client_info, request_video, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock, RwLockWriteGuard};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
 
-type StateGuardT<'a> = RwLockWriteGuard<'a, ClientState>;
+type StateT<'a> = Arc<RwLock<ClientState>>;
+type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
+type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
 
 pub(crate) struct ClientState {
     id: NodeId,

@@ -1,10 +1,10 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::Ack;
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    pub(crate) fn handle_ack(state_guard: &mut StateGuardT, ack: &Ack, session_id: SessionIdT) {
+    pub(crate) fn handle_ack(state_guard: &mut StateGuardWriteT, ack: &Ack, session_id: SessionIdT) {
         // Remove packet from history
         let res = state_guard
             .packets_history

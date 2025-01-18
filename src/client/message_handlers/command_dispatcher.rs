@@ -1,9 +1,9 @@
 use wg_internal::controller::DroneCommand;
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    pub(crate) fn command_dispatcher(state_guard: &mut StateGuardT, command: &DroneCommand) {
+    pub(crate) fn command_dispatcher(state_guard: &mut StateGuardWriteT, command: &DroneCommand) {
         match command {
             DroneCommand::Crash => {
                 state_guard.terminated = true;

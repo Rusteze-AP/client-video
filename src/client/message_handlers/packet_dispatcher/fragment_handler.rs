@@ -1,10 +1,10 @@
 use packet_forge::{MessageType, SessionIdT};
 use wg_internal::packet::Fragment;
 
-use super::{Client, StateGuardT};
+use super::{Client, StateGuardWriteT};
 
 impl Client {
-    fn handle_messages(state_guard: &mut StateGuardT, message: MessageType) {
+    fn handle_messages(state_guard: &mut StateGuardWriteT, message: MessageType) {
         match message {
             MessageType::SubscribeClient(content) => {
                 println!(
@@ -28,7 +28,7 @@ impl Client {
     }
 
     pub(crate) fn handle_fragment(
-        state_guard: &mut StateGuardT,
+        state_guard: &mut StateGuardWriteT,
         frag: Fragment,
         session_id: SessionIdT,
     ) {

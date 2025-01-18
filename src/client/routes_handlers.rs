@@ -1,7 +1,7 @@
 use packet_forge::{ChunkRequest, Index};
 use wg_internal::network::SourceRoutingHeader;
 
-use super::{utils::send_packet, Client};
+use super::{utils::send_packet::send_packet, Client};
 
 impl Client {
     pub(crate) fn request_video(&self, video_name: &str) {
