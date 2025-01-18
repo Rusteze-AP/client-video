@@ -32,10 +32,10 @@ impl Client {
                     Ok(command) => Self::command_dispatcher(&mut state_guard, &command),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
-                        eprintln!(
-                            "Error receiving command for server {}: {:?}",
+                        state_guard.logger.log_error(&format!(
+                            "[CLIENT {}][SC EVENT], error receiving command: {:?}",
                             state_guard.id, e
-                        );
+                        ));
                     }
                 }
 
@@ -43,10 +43,10 @@ impl Client {
                     Ok(packet) => Self::packet_dispatcher(&mut state_guard, packet),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
-                        eprintln!(
-                            "Error receiving message for server {}: {:?}",
+                        state_guard.logger.log_error(&format!(
+                            "[CLIENT {}][SC EVENT], error receiving packet: {:?}",
                             state_guard.id, e
-                        );
+                        ));
                     }
                 }
 

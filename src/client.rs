@@ -1,8 +1,8 @@
+mod logger_settings;
 mod message_handlers;
 mod routes;
 mod routes_handlers;
 mod utils;
-// mod send_packet;
 
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
@@ -65,7 +65,11 @@ impl Client {
             video_sender: None,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
-            logger: Logger::new(LogLevel::None as u8, false, "RustezeDrone".to_string()),
+            logger: Logger::new(
+                LogLevel::None as u8,
+                false,
+                "video-streamer-client".to_string(),
+            ),
             flood_id: 0,
         };
 

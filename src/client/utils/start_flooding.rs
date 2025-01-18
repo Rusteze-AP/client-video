@@ -51,7 +51,7 @@ pub(crate) fn init_flood_request(state: &StateT) {
             flood_req.clone(),
         );
 
-        // Send to drone
+        // Send to node
         {
             let mut state_guard = state.write().unwrap();
             if let Err(err) = send_packet(&mut state_guard, sender, &packet) {

@@ -1,7 +1,10 @@
 use packet_forge::{ChunkRequest, Index};
 use wg_internal::network::SourceRoutingHeader;
 
-use super::{utils::send_packet::send_packet, Client};
+use super::{
+    utils::send_packet::{send_packet, send_sc_packet},
+    Client,
+};
 
 impl Client {
     pub(crate) fn request_video(&self, video_name: &str) {
@@ -15,7 +18,10 @@ impl Client {
 
             // Disassemble the message into packets
             let Ok(packets) = state_guard.packet_forge.disassemble(msg, srh) else {
-                eprintln!("Client {}, error: disassembling failed", state_guard.id);
+                state_guard.logger.log_error(&format!(
+                    "[CLIENT {}][disasembling req_video] failed",
+                    state_guard.id
+                ));
                 return;
             };
 
@@ -23,10 +29,10 @@ impl Client {
             let sender = if let Some(s) = state_guard.senders.get(&dest) {
                 s.clone()
             } else {
-                eprintln!(
-                    "Client {}, error: sender {} not found",
+                state_guard.logger.log_error(&format!(
+                    "[CLIENT {}][req_video] Sender {} not found",
                     state_guard.id, dest
-                );
+                ));
                 return;
             };
 
@@ -34,10 +40,22 @@ impl Client {
         };
 
         for packet in packets {
-            let mut state_guard = self.state.write().unwrap();
-            let res = send_packet(&mut state_guard, &sender, &packet);
-            if let Err(err) = res {
-                state_guard.logger.log_error(err.as_str());
+            // Send to node
+            {
+                let mut state_guard = self.state.write().unwrap();
+                let res = send_packet(&mut state_guard, &sender, &packet);
+                if let Err(err) = res {
+                    state_guard.logger.log_error(err.as_str());
+                }
+            }
+
+            // Send to SC
+            {
+                let state_guard = self.state.read().unwrap();
+                let res = send_sc_packet(&state_guard, &packet);
+                if let Err(err) = res {
+                    state_guard.logger.log_error(err.as_str());
+                }
             }
         }
     }
