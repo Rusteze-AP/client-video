@@ -1,29 +1,45 @@
-use crossbeam::channel::{select_biased, Receiver, Sender};
-use packet_forge::PacketForge;
+mod logger_settings;
+mod message_handlers;
+mod routes;
+mod routes_handlers;
+mod utils;
+
+use bytes::Bytes;
+use crossbeam::channel::{Receiver, Sender};
+use logger::{LogLevel, Logger};
+use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
-use rocket::response::stream::{Event, EventStream};
-use rocket::{self, Build, Ignite, Rocket, State};
+use rocket::{Build, Config, Rocket};
+use routes::{client_events, client_info, request_video, video_stream};
+use routing_handler::RoutingHandler;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::thread;
-use std::time::Duration;
-use tokio::time::interval;
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
-use wg_internal::packet::Packet;
+use wg_internal::packet::{Fragment, Packet};
 
-#[derive(Debug)]
-pub struct ClientState {
+type StateT<'a> = Arc<RwLock<ClientState>>;
+type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
+type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
+
+pub(crate) struct ClientState {
     id: NodeId,
     controller_send: Sender<DroneEvent>,
     controller_recv: Receiver<DroneCommand>,
     packet_recv: Receiver<Packet>,
     senders: HashMap<NodeId, Sender<Packet>>,
     packet_forge: PacketForge,
+    packets_map: HashMap<u64, Vec<Fragment>>,
     terminated: bool,
+    video_sender: Option<broadcast::Sender<Bytes>>,
+    routing_handler: RoutingHandler, // Topology graph
+    packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
+    logger: Logger,
+    flood_id: u64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Client {
     state: Arc<RwLock<ClientState>>,
 }
@@ -44,7 +60,17 @@ impl Client {
             packet_recv: receiver,
             senders,
             packet_forge: PacketForge::new(),
+            packets_map: HashMap::new(),
             terminated: false,
+            video_sender: None,
+            routing_handler: RoutingHandler::new(),
+            packets_history: HashMap::new(),
+            logger: Logger::new(
+                LogLevel::None as u8,
+                false,
+                "video-streamer-client".to_string(),
+            ),
+            flood_id: 0,
         };
 
         Client {
@@ -52,83 +78,30 @@ impl Client {
         }
     }
 
+    /// Get the ID of the client
+    /// # Errors
+    /// May create deadlock if the `RwLock` is poisoned
+    /// # Panics
+    /// This function might panic when called if the lock is already held by the current thread.
+    #[must_use]
     pub fn get_id(&self) -> NodeId {
         self.state.read().unwrap().id
     }
 
-    fn command_dispatcher(&self, command: &DroneCommand) {
-        let mut state = self.state.write().unwrap();
-
-        match command {
-            DroneCommand::Crash => {
-                state.terminated = true;
-            }
-            DroneCommand::SetPacketDropRate(_) => {
-                eprintln!(
-                    "Client {}, error: received a SetPacketDropRate command",
-                    state.id
-                );
-            }
-            _ => {
-                eprintln!(
-                    "Client {}, error: received an unknown command: {:?}",
-                    state.id, command
-                );
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn start_message_processing(self) -> thread::JoinHandle<()> {
-        let state = self.state.clone();
-
-        thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_secs(1));
-
-                // Get mutable access to state
-                let mut state_guard = state.write().unwrap();
-
-                if state_guard.terminated {
-                    break;
-                }
-
-                select_biased! {
-                    recv(state_guard.controller_recv) -> command => {
-                        if let Ok(command) = command {
-                            println!("Client {} received a command: {:?}", state_guard.id, command);
-                            self.command_dispatcher(&command);
-                        } else {
-                            println!("Client {}, SC disconnected", state_guard.id);
-                            break;
-                        }
-                    }
-                    recv(state_guard.packet_recv) -> msg => {
-                        if let Ok(msg) = msg {
-                            println!("Client {} received a message: {:?}", state_guard.id, msg);
-                            if state_guard.id == 20 {
-                                state_guard.id = 69;
-                            } else {
-                                state_guard.id = 20;
-                            }
-                        } else {
-                            eprintln!(
-                                "Error receiving message for client {}", state_guard.id);
-                            break;
-                        }
-                    }
-                }
-
-                // RwLock is automatically released here when state_guard goes out of scope
-            }
-        })
-    }
-
     #[must_use]
     fn configure(client: Client) -> Rocket<Build> {
-        rocket::build()
+        // Config rocket to use a different port for each client
+        let config = Config {
+            port: 8000 + u16::from(client.get_id()),
+            ..Config::default()
+        };
+
+        rocket::custom(&config)
             .manage(client)
-            .mount("/", routes![client_info, client_events])
+            .mount(
+                "/",
+                routes![client_info, client_events, video_stream, request_video],
+            )
             .mount("/", FileServer::from(relative!("static")))
     }
 
@@ -136,28 +109,32 @@ impl Client {
     /// This function will block the current thread until the Rocket app is shut down
     /// # Errors
     /// If the Rocket app fails to launch
-    pub async fn run(self) -> Result<Rocket<Ignite>, rocket::Error> {
-        let _processing_handle = self.clone().start_message_processing();
-        Self::configure(self).launch().await
-    }
-}
+    /// # Panics
+    /// This function might panic when called if the lock is already held by the current thread.
+    pub async fn run(self) {
+        let processing_handle = self.clone().start_message_processing();
+        let state = self.state.clone();
 
-#[get("/client-info")]
-fn client_info(client: &State<Client>) -> String {
-    let state = client.state.read().unwrap();
-    format!("Client ID: {}", state.id)
-}
+        // Launch rocket in a separate task
+        let rocket = Self::configure(self).launch();
 
-#[get("/events")]
-fn client_events(client: &State<Client>) -> EventStream![] {
-    let client_state = client.state.clone();
+        // Monitor termination flag in a separate task
+        let termination_handle = tokio::spawn(async move {
+            loop {
+                if state.read().unwrap().terminated {
+                    // Wait for processing thread to complete
+                    let _ = processing_handle.join();
+                    break;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        });
 
-    EventStream! {
-        let mut interval = interval(Duration::from_secs(1));
-        loop {
-            let id = client_state.read().unwrap().id;
-            yield Event::data(id.to_string());
-            interval.tick().await;
+        // Run both tasks concurrently
+        tokio::select! {
+            _ = rocket => {},
+            _ = termination_handle => {},
         }
+        println!("[CLIENT] Terminated");
     }
 }
