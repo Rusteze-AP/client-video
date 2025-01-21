@@ -14,6 +14,8 @@ use routes::{client_events, client_info, request_video, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use surrealdb::engine::local::{Db, Mem};
+use surrealdb::Surreal;
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
@@ -42,17 +44,21 @@ pub(crate) struct ClientState {
 #[derive(Clone)]
 pub struct Client {
     state: Arc<RwLock<ClientState>>,
+    db: Arc<Surreal<Db>>,
 }
 
 impl Client {
     #[must_use]
-    pub fn new(
+    pub async fn new(
         id: NodeId,
         command_send: Sender<DroneEvent>,
         command_recv: Receiver<DroneCommand>,
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
     ) -> Self {
+        let db = Surreal::new::<Mem>(()).await.unwrap();
+        db.use_ns("test_ns").use_db("test_db").await.unwrap();
+
         let state = ClientState {
             id,
             controller_send: command_send,
@@ -75,6 +81,7 @@ impl Client {
 
         Client {
             state: Arc::new(RwLock::new(state)),
+            db: Arc::new(db),
         }
     }
 
