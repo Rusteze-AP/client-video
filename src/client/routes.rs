@@ -8,11 +8,25 @@ use rocket::{
 };
 use tokio::{sync::broadcast, time::interval};
 
+use crate::db::queries::get_video_list;
+
 use super::Client;
 
 #[get("/req-video/<video_name>")]
-pub(crate) fn request_video(client: &State<Client>, video_name: &str) {
-    client.request_video(video_name);
+pub(crate) async fn request_video(client: &State<Client>, video_name: &str) {
+    client.request_video(video_name).await;
+}
+
+#[get("/req-video-list")]
+pub(crate) async fn request_video_list(client: &State<Client>) -> EventStream![] {
+    let videos_info = get_video_list(client.db.clone()).await.unwrap_or_default();
+
+    EventStream! {
+        for video_info in videos_info {
+            let json_data = serde_json::to_string(&video_info).unwrap();
+            yield Event::data(json_data);
+        }
+    }
 }
 
 #[get("/client-info")]

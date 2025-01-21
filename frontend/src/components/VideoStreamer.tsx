@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import "video.js/dist/video-js.css";
@@ -13,11 +13,21 @@ interface VideoJSOptions {
     }[];
 }
 
+type VideoInfo = {
+    title: string;
+    description: string;
+    duration: number;
+    mime_type: string;
+    created_at: string;
+};
+
 const VideoStreamer: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const playerRef = useRef<Player | null>(null);
     const mediaSourceRef = useRef<MediaSource | null>(null);
     const sourceBufferRef = useRef<SourceBuffer | null>(null);
+
+    const [videos, setVideos] = useState<VideoInfo[]>([]);
 
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
@@ -31,9 +41,9 @@ const VideoStreamer: React.FC = () => {
         throw new Error("Unsupported data format");
     };
 
-    const requestVideo = async (): Promise<void> => {
+    const requestVideo = async (video_name: string): Promise<void> => {
         try {
-            const response = await fetch("/req-video/dancing_pirate.mp4", {
+            const response = await fetch(`/req-video/${video_name}`, {
                 method: "GET",
             });
             if (response.ok) {
@@ -46,9 +56,34 @@ const VideoStreamer: React.FC = () => {
         }
     };
 
+    const requestVideoList = async (): Promise<void> => {
+        try {
+            const response = await fetch("/req-video-list", {
+                method: "GET",
+            });
+            if (response.ok) {
+                const text = await response.text();
+                // Parse the SSE format
+                const parsedVideos = text
+                    .trim()
+                    .split("\n")
+                    .filter((line) => line.startsWith("data:"))
+                    .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
+
+                setVideos(parsedVideos);
+            } else {
+                console.error("Failed to fetch videos:", response.status);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+    };
+
     useEffect(() => {
         // Initialize video player
         if (!videoRef.current) return;
+
+        requestVideoList();
 
         mediaSourceRef.current = new MediaSource();
         const videoURL = URL.createObjectURL(mediaSourceRef.current);
@@ -76,9 +111,13 @@ const VideoStreamer: React.FC = () => {
         mediaSourceRef.current.addEventListener("sourceopen", () => {
             if (!mediaSourceRef.current) return;
 
-            sourceBufferRef.current = mediaSourceRef.current.addSourceBuffer(
-                'video/mp4; codecs="avc1.42E01E,mp4a.40.2"'
-            );
+            if (mediaSourceRef.current?.readyState === "open") {
+                sourceBufferRef.current = mediaSourceRef.current.addSourceBuffer(
+                    'video/mp4; codecs="avc1.42E01E,mp4a.40.2"'
+                );
+            } else {
+                console.error("MediaSource not ready");
+            }
 
             const evtSource = new EventSource("/video-stream");
 
@@ -104,7 +143,7 @@ const VideoStreamer: React.FC = () => {
             };
 
             // Handle buffer updates
-            sourceBufferRef.current.addEventListener("updateend", () => {
+            sourceBufferRef.current?.addEventListener("updateend", () => {
                 if (!sourceBufferRef.current || !playerRef.current) return;
 
                 if (sourceBufferRef.current.buffered.length > 0) {
@@ -133,7 +172,7 @@ const VideoStreamer: React.FC = () => {
     return (
         <div className="w-full max-w-4xl mx-auto p-4">
             <button
-                onClick={requestVideo}
+                onClick={() => requestVideo("dancing_pirate")}
                 className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
                 Request Video
@@ -154,6 +193,30 @@ const VideoStreamer: React.FC = () => {
                         supports HTML5 video.
                     </p>
                 </video>
+            </div>
+
+            <div className="p-4">
+                <h1 className="text-2xl font-bold mb-6">Available Videos</h1>
+                <div className="grid gap-4 md:grid-cols-2">
+                    {videos.map((video, index) => (
+                        <div key={index} className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
+                            <button
+                                onClick={() => requestVideo(video.title)}
+                                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                            >
+                                Request Video
+                            </button>
+                            <p className="text-gray-600 mb-2">{video.description}</p>
+                            <div className="text-sm text-gray-500">
+                                <p>Type: {video.mime_type}</p>
+                                <p>Duration: {video.duration}s</p>
+                                <p>Added: {video.created_at}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                {videos.length === 0 && <div className="text-center text-gray-500 mt-8">No videos available</div>}
             </div>
         </div>
     );

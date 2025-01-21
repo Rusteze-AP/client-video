@@ -16,6 +16,11 @@ impl Client {
                 // Send data to event stream
                 if let Some(sender) = &state_guard.video_sender {
                     let _ = sender.send(content.chunk_data);
+                } else {
+                    state_guard.logger.log_error(&format!(
+                        "[CLIENT {}][ChunkResponse] frontend sender not found",
+                        state_guard.id
+                    ));
                 }
             }
             _ => {

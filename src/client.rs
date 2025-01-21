@@ -3,6 +3,7 @@ mod message_handlers;
 mod routes;
 mod routes_handlers;
 mod utils;
+mod video_chunker;
 
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
@@ -10,7 +11,7 @@ use logger::{LogLevel, Logger};
 use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
-use routes::{client_events, client_info, request_video, video_stream};
+use routes::{client_events, client_info, request_video, request_video_list, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -20,6 +21,8 @@ use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
+
+use crate::utils::pupulate_db;
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
 type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
@@ -49,6 +52,9 @@ pub struct Client {
 
 impl Client {
     #[must_use]
+    /// Create a new client
+    /// # Panics
+    /// This function might panic if the `Surreal` instance fails to initialize
     pub async fn new(
         id: NodeId,
         command_send: Sender<DroneEvent>,
@@ -57,7 +63,13 @@ impl Client {
         senders: HashMap<NodeId, Sender<Packet>>,
     ) -> Self {
         let db = Surreal::new::<Mem>(()).await.unwrap();
-        db.use_ns("test_ns").use_db("test_db").await.unwrap();
+        db.use_ns("video_client")
+            .use_db(format!("client_{id}"))
+            .await
+            .unwrap();
+        let db = Arc::new(db);
+        // Initialize the database with some data
+        pupulate_db(&db.clone()).await.unwrap();
 
         let state = ClientState {
             id,
@@ -81,7 +93,7 @@ impl Client {
 
         Client {
             state: Arc::new(RwLock::new(state)),
-            db: Arc::new(db),
+            db,
         }
     }
 
@@ -107,7 +119,13 @@ impl Client {
             .manage(client)
             .mount(
                 "/",
-                routes![client_info, client_events, video_stream, request_video],
+                routes![
+                    client_info,
+                    client_events,
+                    video_stream,
+                    request_video,
+                    request_video_list
+                ],
             )
             .mount("/", FileServer::from(relative!("static")))
     }
