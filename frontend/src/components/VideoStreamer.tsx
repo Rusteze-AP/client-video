@@ -1,4 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
+import videojs from "video.js";
+import Player from "video.js/dist/types/player";
+import "video.js/dist/video-js.css";
+
+interface VideoJSOptions {
+    controls: boolean;
+    responsive: boolean;
+    fluid: boolean;
+    sources: {
+        src: string;
+        type: string;
+    }[];
+}
 
 type VideoInfo = {
     title: string;
@@ -10,13 +23,11 @@ type VideoInfo = {
 
 const VideoStreamer: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
+    const playerRef = useRef<Player | null>(null);
     const mediaSourceRef = useRef<MediaSource | null>(null);
     const sourceBufferRef = useRef<SourceBuffer | null>(null);
-    const eventSourceRef = useRef<EventSource | null>(null);
-    const pendingBuffers = useRef<Uint8Array[]>([]);
 
     const [videos, setVideos] = useState<VideoInfo[]>([]);
-    const [error, setError] = useState<string | null>(null);
 
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
@@ -30,162 +41,18 @@ const VideoStreamer: React.FC = () => {
         throw new Error("Unsupported data format");
     };
 
-    const appendBuffer = async (chunk: Uint8Array) => {
-        if (!sourceBufferRef.current) {
-            pendingBuffers.current.push(chunk);
-            return;
-        }
-
-        try {
-            if (!sourceBufferRef.current.updating) {
-                sourceBufferRef.current.appendBuffer(chunk);
-            } else {
-                pendingBuffers.current.push(chunk);
-            }
-        } catch (error) {
-            console.error("Error appending buffer:", error);
-            setError("Error appending video data");
-        }
-    };
-
-    const processBufferQueue = () => {
-        if (!sourceBufferRef.current || sourceBufferRef.current.updating) {
-            return;
-        }
-
-        if (pendingBuffers.current.length > 0) {
-            const nextBuffer = pendingBuffers.current.shift();
-            if (nextBuffer) {
-                try {
-                    sourceBufferRef.current.appendBuffer(nextBuffer);
-                } catch (error) {
-                    console.error("Error processing buffer queue:", error);
-                }
-            }
-        }
-    };
-
-    const cleanupMediaSource = () => {
-        setError(null);
-        pendingBuffers.current = [];
-
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-        }
-
-        if (sourceBufferRef.current && mediaSourceRef.current) {
-            try {
-                if (mediaSourceRef.current.readyState === "open") {
-                    mediaSourceRef.current.removeSourceBuffer(sourceBufferRef.current);
-                }
-            } catch (e) {
-                console.warn("Error removing source buffer:", e);
-            }
-            sourceBufferRef.current = null;
-        }
-
-        if (mediaSourceRef.current?.readyState === "open") {
-            try {
-                mediaSourceRef.current.endOfStream();
-            } catch (e) {
-                console.warn("Error ending media stream:", e);
-            }
-        }
-
-        if (videoRef.current) {
-            videoRef.current.src = "";
-        }
-    };
-
-    const initializeMediaSource = () => {
-        cleanupMediaSource();
-
-        try {
-            mediaSourceRef.current = new MediaSource();
-            const videoURL = URL.createObjectURL(mediaSourceRef.current);
-
-            if (videoRef.current) {
-                videoRef.current.src = videoURL;
-            }
-
-            mediaSourceRef.current.addEventListener("sourceopen", () => {
-                if (!mediaSourceRef.current || mediaSourceRef.current.readyState !== "open") {
-                    setError("Failed to initialize video player");
-                    return;
-                }
-
-                try {
-                    // Try different codec strings
-                    const codecStrings = ['video/mp4; codecs="avc1.42E01E,mp4a.40.2"'];
-
-                    let supported = false;
-                    for (const codec of codecStrings) {
-                        if (MediaSource.isTypeSupported(codec)) {
-                            sourceBufferRef.current = mediaSourceRef.current.addSourceBuffer(codec);
-                            supported = true;
-                            break;
-                        }
-                    }
-
-                    if (!supported) {
-                        throw new Error("No supported codec found");
-                    }
-
-                    sourceBufferRef.current!.addEventListener("updateend", () => {
-                        processBufferQueue();
-                    });
-
-                    setupEventSource();
-                } catch (error) {
-                    console.error("Error setting up media source:", error);
-                    setError("Failed to initialize video codec");
-                    cleanupMediaSource();
-                }
-            });
-        } catch (error) {
-            console.error("Error creating MediaSource:", error);
-            setError("Failed to create video player");
-        }
-    };
-
-    const setupEventSource = () => {
-        eventSourceRef.current = new EventSource("/video-stream");
-
-        eventSourceRef.current.onmessage = async (event: MessageEvent) => {
-            try {
-                const videoChunk = await decodeChunk(event.data);
-                await appendBuffer(videoChunk);
-            } catch (error) {
-                console.error("Error processing video chunk:", error);
-                setError("Error processing video data");
-            }
-        };
-
-        eventSourceRef.current.onerror = (error: Event) => {
-            console.error("EventSource error:", error);
-            setError("Error streaming video data");
-            cleanupMediaSource();
-        };
-    };
-
     const requestVideo = async (video_name: string): Promise<void> => {
-        setError(null);
-
         try {
             const response = await fetch(`/req-video/${video_name}`, {
                 method: "GET",
             });
             if (response.ok) {
-                console.log("Video request successful:", await response.text());
-                initializeMediaSource();
+                console.log("Message sent successfully:", await response.text());
             } else {
-                console.error("Failed to request video:", response.status);
-                setError("Failed to request video");
+                console.error("Failed to send message:", response.status);
             }
         } catch (error) {
-            console.error("Error requesting video:", error);
-            setError("Error requesting video");
+            console.error("Error sending message:", error);
         }
     };
 
@@ -196,38 +63,136 @@ const VideoStreamer: React.FC = () => {
             });
             if (response.ok) {
                 const text = await response.text();
+                // Parse the SSE format
                 const parsedVideos = text
                     .trim()
                     .split("\n")
                     .filter((line) => line.startsWith("data:"))
-                    .map((line) => JSON.parse(line.slice(5)));
+                    .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
 
                 setVideos(parsedVideos);
             } else {
                 console.error("Failed to fetch videos:", response.status);
-                setError("Failed to fetch video list");
             }
         } catch (error) {
-            console.error("Error fetching video list:", error);
-            setError("Error loading video list");
+            console.error("Error sending message:", error);
         }
     };
 
     useEffect(() => {
+        // Initialize video player
+        if (!videoRef.current) return;
+
         requestVideoList();
 
+        mediaSourceRef.current = new MediaSource();
+        const videoURL = URL.createObjectURL(mediaSourceRef.current);
+
+        const videoJsOptions: VideoJSOptions = {
+            controls: true,
+            responsive: true,
+            fluid: true,
+            sources: [
+                {
+                    src: videoURL,
+                    type: "video/mp4",
+                },
+            ],
+        };
+
+        playerRef.current = videojs(videoRef.current, videoJsOptions, function onPlayerReady(this: Player) {
+            this.src({
+                src: videoURL,
+                type: "video/mp4",
+            });
+        });
+
+        // Handle MediaSource setup
+        mediaSourceRef.current.addEventListener("sourceopen", () => {
+            if (!mediaSourceRef.current) return;
+
+            if (mediaSourceRef.current?.readyState === "open") {
+                sourceBufferRef.current = mediaSourceRef.current.addSourceBuffer(
+                    'video/mp4; codecs="avc1.42E01E,mp4a.40.2"'
+                );
+            } else {
+                console.error("MediaSource not ready");
+            }
+
+            const evtSource = new EventSource("/video-stream");
+
+            evtSource.onmessage = async (event: MessageEvent) => {
+                try {
+                    const videoChunk = await decodeChunk(event.data);
+
+                    if (sourceBufferRef.current?.updating) {
+                        await new Promise<void>((resolve) => {
+                            sourceBufferRef.current?.addEventListener("updateend", () => resolve(), { once: true });
+                        });
+                    }
+
+                    sourceBufferRef.current?.appendBuffer(videoChunk);
+                } catch (error) {
+                    console.error("Error processing video chunk:", error);
+                }
+            };
+
+            evtSource.onerror = (error: Event) => {
+                console.error("EventSource error:", error);
+                evtSource.close();
+            };
+
+            // Handle buffer updates
+            sourceBufferRef.current?.addEventListener("updateend", () => {
+                if (!sourceBufferRef.current || !playerRef.current) return;
+
+                if (sourceBufferRef.current.buffered.length > 0) {
+                    const bufferEnd = sourceBufferRef.current.buffered.end(0);
+                    const currentTime = playerRef.current.currentTime();
+
+                    if (currentTime !== undefined && bufferEnd - currentTime > 30) {
+                        sourceBufferRef.current.remove(0, currentTime - 10);
+                    }
+                }
+            });
+        });
+
+        // Cleanup
         return () => {
-            cleanupMediaSource();
+            if (playerRef.current) {
+                playerRef.current.dispose();
+            }
+            if (mediaSourceRef.current?.readyState === "open") {
+                mediaSourceRef.current.endOfStream();
+            }
+            URL.revokeObjectURL(videoURL);
         };
     }, []);
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4">
-            <div className="mb-4">
-                <video ref={videoRef} className="w-full aspect-video bg-black" controls playsInline>
-                    Your browser does not support HTML5 video.
+            <button
+                onClick={() => requestVideo("dancing_pirate")}
+                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+            >
+                Request Video
+            </button>
+
+            <div>
+                <video
+                    ref={videoRef}
+                    className="video-js vjs-big-play-centered"
+                    controls
+                    preload="auto"
+                    width={640}
+                    height={360}
+                    data-setup="{}"
+                >
+                    <p className="vjs-no-js">
+                        To view this video, please enable JavaScript and consider upgrading to a web browser that
+                        supports HTML5 video.
+                    </p>
                 </video>
-                {error && <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>}
             </div>
 
             <div className="p-4">
@@ -238,9 +203,9 @@ const VideoStreamer: React.FC = () => {
                             <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
                             <button
                                 onClick={() => requestVideo(video.title)}
-                                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors disabled:bg-gray-400"
+                                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                             >
-                                Play Video
+                                Request Video
                             </button>
                             <p className="text-gray-600 mb-2">{video.description}</p>
                             <div className="text-sm text-gray-500">
