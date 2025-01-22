@@ -18,17 +18,17 @@ impl Client {
         match video_content {
             Ok(video_content) => {
                 if let Some(sender) = &state_guard.video_sender {
-                    let mut video_chunks = get_video_chunks(video_content);
-                    while let Some(chunk) = video_chunks.next() {
+                    let video_chunks = get_video_chunks(video_content);
+                    for chunk in video_chunks {
                         let _ = sender.send(chunk);
                     }
                     return Some(());
-                } else {
-                    state_guard.logger.log_error(&format!(
-                        "[CLIENT {}][req_video] frontend sender not found",
-                        state_guard.id
-                    ));
                 }
+
+                state_guard.logger.log_error(&format!(
+                    "[CLIENT {}][req_video] frontend sender not found",
+                    state_guard.id
+                ));
             }
             Err(err) => {
                 state_guard.logger.log_error(&format!(
@@ -96,7 +96,7 @@ impl Client {
 
     pub(crate) async fn request_video(&self, video_name: &str) {
         // Search for the video in the database
-        if let Some(_) = self.get_video_from_db(video_name).await {
+        if self.get_video_from_db(video_name).await.is_some() {
             return;
         }
 

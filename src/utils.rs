@@ -6,7 +6,7 @@ use tokio::try_join;
 use crate::db::structures::Video;
 
 async fn insert_gandalf_sax(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrealdb::Result<()> {
-    let video_content = std::fs::read(path_to_video).expect("Failed to load gandalf video");
+    let video_content = std::fs::read(path_to_video).expect("Failed to load gandalf_sax video");
 
     let video = Video {
         id: None,
@@ -27,7 +27,7 @@ async fn insert_gandalf_sax(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrea
 }
 
 async fn insert_dancing_pirate(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrealdb::Result<()> {
-    let video_content = std::fs::read(path_to_video).expect("Failed to load gandalf video");
+    let video_content = std::fs::read(path_to_video).expect("Failed to load dancing_pirate video");
 
     let video = Video {
         id: None,

@@ -11,7 +11,7 @@ use logger::{LogLevel, Logger};
 use packet_forge::{PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
-use routes::{client_events, client_info, request_video, request_video_list, video_stream};
+use routes::{client_events, request_video, request_video_list, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -120,7 +120,6 @@ impl Client {
             .mount(
                 "/",
                 routes![
-                    client_info,
                     client_events,
                     video_stream,
                     request_video,

@@ -29,12 +29,6 @@ pub(crate) async fn request_video_list(client: &State<Client>) -> EventStream![]
     }
 }
 
-#[get("/client-info")]
-pub(crate) fn client_info(client: &State<Client>) -> String {
-    let state = client.state.read().unwrap();
-    format!("Client ID: {}", state.id)
-}
-
 #[get("/events")]
 pub(crate) fn client_events(client: &State<Client>) -> EventStream![] {
     let client_state = client.state.clone();

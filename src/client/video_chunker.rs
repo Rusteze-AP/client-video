@@ -40,10 +40,9 @@ impl VideoChunker {
         Ok(Some(buffer.freeze()))
     }
 
-    pub fn reset(&mut self) -> io::Result<()> {
+    pub fn reset(&mut self) {
         self.position = 0;
         self.data.set_position(0);
-        Ok(())
     }
 }
 
@@ -56,12 +55,11 @@ pub fn get_video_chunks(video_data: Vec<u8>) -> impl Iterator<Item = Bytes> {
         type Item = Bytes;
 
         fn next(&mut self) -> Option<Self::Item> {
-            match self.chunker.next_chunk() {
-                Ok(Some(chunk)) => Some(chunk),
-                _ => {
-                    let _ = self.chunker.reset();
-                    None
-                }
+            if let Ok(Some(chunk)) = self.chunker.next_chunk() {
+                Some(chunk)
+            } else {
+                self.chunker.reset();
+                None
             }
         }
     }
