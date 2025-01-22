@@ -14,6 +14,7 @@ interface VideoJSOptions {
 }
 
 type VideoInfo = {
+    id: number;
     title: string;
     description: string;
     duration: number;
@@ -41,7 +42,7 @@ const VideoStreamer: React.FC = () => {
         throw new Error("Unsupported data format");
     };
 
-    const requestVideo = async (video_name: string): Promise<void> => {
+    const requestVideo = async (video_name: number): Promise<void> => {
         try {
             const response = await fetch(`/req-video/${video_name}`, {
                 method: "GET",
@@ -171,12 +172,12 @@ const VideoStreamer: React.FC = () => {
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4">
-            <button
+            {/* <button
                 onClick={() => requestVideo("dancing_pirate")}
                 className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
             >
                 Request Video
-            </button>
+            </button> */}
 
             <div>
                 <video
@@ -202,7 +203,7 @@ const VideoStreamer: React.FC = () => {
                         <div key={index} className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
                             <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
                             <button
-                                onClick={() => requestVideo(video.title)}
+                                onClick={() => requestVideo(video.id)}
                                 className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
                             >
                                 Request Video
@@ -212,6 +213,7 @@ const VideoStreamer: React.FC = () => {
                                 <p>Type: {video.mime_type}</p>
                                 <p>Duration: {video.duration}s</p>
                                 <p>Added: {video.created_at}</p>
+                                <p>ID: {video.id}</p>
                             </div>
                         </div>
                     ))}

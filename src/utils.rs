@@ -1,25 +1,27 @@
 use std::sync::Arc;
 
+use packet_forge::{Metadata, VideoMetaData};
 use surrealdb::{engine::local::Db, Surreal};
 use tokio::try_join;
 
 use crate::db::structures::Video;
 
 async fn insert_gandalf_sax(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrealdb::Result<()> {
-    let video_content = std::fs::read(path_to_video).expect("Failed to load gandalf_sax video");
+    let content = std::fs::read(path_to_video).expect("Failed to load gandalf_sax video");
 
-    let video = Video {
-        id: None,
+    let mut metadata = VideoMetaData {
+        id: 0,
         title: "gandalf_sax".to_string(),
-        description: "gandalf playing sax".to_string(),
-        duration: 0.0,
-        content: video_content,
+        description: "gandalf sax guy".to_string(),
+        duration: 0,
         mime_type: "video/mp4".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
+    metadata.id = metadata.compact_hash_u16();
+    let video = Video { metadata, content };
 
     let _created: Option<Video> = db
-        .create(("video", video.title.clone()))
+        .create(("video", video.metadata.id.to_string()))
         .content(video)
         .await?;
 
@@ -27,20 +29,21 @@ async fn insert_gandalf_sax(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrea
 }
 
 async fn insert_dancing_pirate(db: Arc<Surreal<Db>>, path_to_video: &str) -> surrealdb::Result<()> {
-    let video_content = std::fs::read(path_to_video).expect("Failed to load dancing_pirate video");
+    let content = std::fs::read(path_to_video).expect("Failed to load dancing_pirate video");
 
-    let video = Video {
-        id: None,
+    let mut metadata = VideoMetaData {
+        id: 0,
         title: "dancing_pirate".to_string(),
-        description: "a pirate dancing".to_string(),
-        duration: 0.0,
-        content: video_content,
+        description: "dancing pirate".to_string(),
+        duration: 0,
         mime_type: "video/mp4".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
+    metadata.id = metadata.compact_hash_u16();
+    let video = Video { metadata, content };
 
     let _created: Option<Video> = db
-        .create(("video", video.title.clone()))
+        .create(("video", video.metadata.id.to_string()))
         .content(video)
         .await?;
 

@@ -1,4 +1,4 @@
-use packet_forge::{ChunkRequest, Index};
+use packet_forge::{ChunkRequest, FileHash, Index};
 use wg_internal::network::SourceRoutingHeader;
 
 use crate::db::queries::get_video_content;
@@ -10,9 +10,9 @@ use super::{
 };
 
 impl Client {
-    async fn get_video_from_db(&self, video_name: &str) -> Option<()> {
+    async fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
         // Search for the video in the database
-        let video_content = get_video_content(self.db.clone(), video_name).await;
+        let video_content = get_video_content(self.db.clone(), video_id).await;
         let state_guard = self.state.read().unwrap();
 
         match video_content {
@@ -41,8 +41,8 @@ impl Client {
         None
     }
 
-    pub(crate) fn request_video_from_network(&self, video_name: &str) {
-        let msg = ChunkRequest::new(self.get_id(), video_name.to_string() + ".mp4", Index::All);
+    pub(crate) fn request_video_from_network(&self, video_id: FileHash) {
+        let msg = ChunkRequest::new(self.get_id(), video_id, Index::All);
         let hops = vec![20, 1, 30];
         let dest = hops[1];
         let srh = SourceRoutingHeader::new(hops, 1);
@@ -94,13 +94,13 @@ impl Client {
         }
     }
 
-    pub(crate) async fn request_video(&self, video_name: &str) {
+    pub(crate) async fn request_video(&self, video_id: FileHash) {
         // Search for the video in the database
-        if self.get_video_from_db(video_name).await.is_some() {
+        if self.get_video_from_db(video_id).await.is_some() {
             return;
         }
 
         // If the video is not found in the database, request it from the network
-        self.request_video_from_network(video_name);
+        self.request_video_from_network(video_id);
     }
 }

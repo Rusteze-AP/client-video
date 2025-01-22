@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
+use packet_forge::FileHash;
 use rocket::{
     response::stream::{Event, EventStream},
     State,
@@ -12,9 +13,9 @@ use crate::db::queries::get_video_list;
 
 use super::Client;
 
-#[get("/req-video/<video_name>")]
-pub(crate) async fn request_video(client: &State<Client>, video_name: &str) {
-    client.request_video(video_name).await;
+#[get("/req-video/<video_id>")]
+pub(crate) async fn request_video(client: &State<Client>, video_id: FileHash) {
+    client.request_video(video_id).await;
 }
 
 #[get("/req-video-list")]
