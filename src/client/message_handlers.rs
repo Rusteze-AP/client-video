@@ -33,8 +33,9 @@ impl Client {
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         state_guard.logger.log_error(&format!(
-                            "[CLIENT {}][SC EVENT], error receiving command: {:?}",
-                            state_guard.id, e
+                            "[{}, {}], error receiving command: {e:?}",
+                            file!(),
+                            line!()
                         ));
                     }
                 }
@@ -44,8 +45,9 @@ impl Client {
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
                         state_guard.logger.log_error(&format!(
-                            "[CLIENT {}][SC EVENT], error receiving packet: {:?}",
-                            state_guard.id, e
+                            "[{}, {}], error receiving packet: {e:?}, ",
+                            file!(),
+                            line!()
                         ));
                     }
                 }

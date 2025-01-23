@@ -17,6 +17,16 @@ impl Client {
 
         match video_content {
             Ok(video_content) => {
+                if video_content.is_empty() {
+                    state_guard.logger.log_error(&format!(
+                        "[{}, {}] video content is empty",
+                        file!(),
+                        line!()
+                    ));
+                    return None;
+                }
+
+                // Send video chunks to frontend
                 if let Some(sender) = &state_guard.video_sender {
                     let video_chunks = get_video_chunks(video_content);
                     for chunk in video_chunks {
@@ -26,14 +36,16 @@ impl Client {
                 }
 
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][req_video] frontend sender not found",
-                    state_guard.id
+                    "[{}, {}] frontend sender not found",
+                    file!(),
+                    line!()
                 ));
             }
             Err(err) => {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][req_video] failed to get video content: {}",
-                    state_guard.id, err
+                    "[{}, {}] failed to get video content: {err}",
+                    file!(),
+                    line!()
                 ));
             }
         }
@@ -53,8 +65,9 @@ impl Client {
             // Disassemble the message into packets
             let Ok(packets) = state_guard.packet_forge.disassemble(msg, srh) else {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][disasembling req_video] failed",
-                    state_guard.id
+                    "[{}, {}] disassemble failed",
+                    file!(),
+                    line!()
                 ));
                 return;
             };
@@ -64,8 +77,9 @@ impl Client {
                 s.clone()
             } else {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][req_video] Sender {} not found",
-                    state_guard.id, dest
+                    "[{}, {}] Sender {dest} not found",
+                    file!(),
+                    line!()
                 ));
                 return;
             };
@@ -79,7 +93,12 @@ impl Client {
                 let mut state_guard = self.state.write().unwrap();
                 let res = send_packet(&mut state_guard, &sender, &packet);
                 if let Err(err) = res {
-                    state_guard.logger.log_error(err.as_str());
+                    state_guard.logger.log_error(&format!(
+                        "[{}, {}] failed send packet: {:?}",
+                        file!(),
+                        line!(),
+                        err.as_str()
+                    ));
                 }
             }
 
@@ -88,7 +107,12 @@ impl Client {
                 let state_guard = self.state.read().unwrap();
                 let res = send_sc_packet(&state_guard, &packet);
                 if let Err(err) = res {
-                    state_guard.logger.log_error(err.as_str());
+                    state_guard.logger.log_error(&format!(
+                        "[{}, {}] failed send sc packet: {:?}",
+                        file!(),
+                        line!(),
+                        err.as_str()
+                    ));
                 }
             }
         }

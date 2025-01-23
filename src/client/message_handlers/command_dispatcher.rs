@@ -15,15 +15,17 @@ impl Client {
                 let res = state_guard.senders.remove(node_id);
                 if res.is_none() {
                     state_guard.logger.log_error(&format!(
-                        "[CLIENT {}] on remove sender: sender {} not found",
-                        state_guard.id, node_id
+                        "[{}, {}] failed remove, sender {node_id} not found",
+                        file!(),
+                        line!()
                     ));
                 }
             }
             DroneCommand::SetPacketDropRate(_) => {
                 state_guard.logger.log_warn(&format!(
-                    "[CLIENT {}] received a SetPacketDropRate command",
-                    state_guard.id
+                    "[{}, {}] received a SetPacketDropRate command",
+                    file!(),
+                    line!()
                 ));
             }
         }

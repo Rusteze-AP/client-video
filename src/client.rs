@@ -86,7 +86,7 @@ impl Client {
             logger: Logger::new(
                 LogLevel::None as u8,
                 false,
-                "video-streamer-client".to_string(),
+                format!("client-video-{id}"),
             ),
             flood_id: 0,
         };

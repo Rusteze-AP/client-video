@@ -56,8 +56,11 @@ pub(crate) fn init_flood_request(state: &StateT) {
             let mut state_guard = state.write().unwrap();
             if let Err(err) = send_packet(&mut state_guard, sender, &packet) {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT-{}][FLOODING] Sending to [DRONE-{}]: {}",
-                    state_guard.id, target_id, err
+                    "[{}, {}] sending flood_req to [DRONE-{}] | err: {}",
+                    file!(),
+                    line!(),
+                    target_id,
+                    err
                 ));
             }
         }
@@ -66,7 +69,12 @@ pub(crate) fn init_flood_request(state: &StateT) {
         {
             let state_guard = state.read().unwrap();
             if let Err(err) = send_sc_packet(&state_guard, &packet) {
-                state_guard.logger.log_error(err.as_str());
+                state_guard.logger.log_error(&format!(
+                    "[{}, {}] failed to send flood_req to SC | err: {}",
+                    file!(),
+                    line!(),
+                    err
+                ));
             }
         }
     }

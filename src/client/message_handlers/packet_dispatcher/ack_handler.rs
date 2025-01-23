@@ -15,8 +15,11 @@ impl Client {
             .remove(&(ack.fragment_index, session_id));
         if res.is_none() {
             state_guard.logger.log_error(&format!(
-                "[CLIENT {}][handle_ack] failed to remove packet_history with id ({}, {})",
-                state_guard.id, ack.fragment_index, session_id
+                "[{}, {}] failed to remove packet_history with id ({}, {})",
+                file!(),
+                line!(),
+                ack.fragment_index,
+                session_id
             ));
         }
     }

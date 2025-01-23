@@ -13,7 +13,9 @@ impl Client {
         let client_id = state_guard.id;
         let Some(srh) = state_guard.routing_handler.best_path(client_id, dest) else {
             state_guard.logger.log_error(&format!(
-                "[CLIENT {client_id}][retransmit_packet] error: best path not found from {client_id} to {dest}"
+                "[{}, {}] best path not found from {client_id} to {dest}",
+                file!(),
+                line!()
             ));
             return;
         };
@@ -27,8 +29,10 @@ impl Client {
             s.clone()
         } else {
             state_guard.logger.log_error(&format!(
-                "[CLIENT {}][retransmit_packet] Sender {} not found",
-                state_guard.id, next_hop
+                "[{}, {}] sender {} not found",
+                file!(),
+                line!(),
+                next_hop
             ));
             return;
         };
@@ -37,6 +41,12 @@ impl Client {
 
         if let Err(err) = res {
             state_guard.logger.log_error(err.as_str());
+            state_guard.logger.log_error(&format!(
+                "[{}, {}] failed to send packet | err: {}",
+                file!(),
+                line!(),
+                err
+            ));
         }
     }
 
@@ -52,8 +62,11 @@ impl Client {
             .cloned()
         else {
             state_guard.logger.log_error(&format!(
-                "[CLIENT {}][handle_nack] failed to retrieve packet_history with id ({}, {})",
-                state_guard.id, nack.fragment_index, session_id
+                "[{}, {}] failed to retrieve packet_history with id ({}, {})",
+                file!(),
+                line!(),
+                nack.fragment_index,
+                session_id
             ));
             return;
         };
@@ -62,20 +75,25 @@ impl Client {
             NackType::Dropped => Self::retransmit_packet(state_guard, packet),
             NackType::DestinationIsDrone => {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][handle_nack] received a Nack with DestinationIsDrone",
-                    state_guard.id
+                    "[{}, {}] received a Nack with DestinationIsDrone",
+                    file!(),
+                    line!()
                 ));
             }
             NackType::ErrorInRouting(id) => {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][handle_nack] received a Nack with ErrorInRouting: {}",
-                    state_guard.id, id
+                    "[{}, {}] received a Nack with ErrorInRouting: {}",
+                    file!(),
+                    line!(),
+                    id
                 ));
             }
             NackType::UnexpectedRecipient(id) => {
                 state_guard.logger.log_error(&format!(
-                    "[CLIENT {}][handle_nack] received a Nack with UnexpectedRecipient: {}",
-                    state_guard.id, id
+                    "[{}, {}] received a Nack with UnexpectedRecipient: {}",
+                    file!(),
+                    line!(),
+                    id
                 ));
             }
         }

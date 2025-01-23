@@ -18,8 +18,9 @@ impl Client {
                     let _ = sender.send(content.chunk_data);
                 } else {
                     state_guard.logger.log_error(&format!(
-                        "[CLIENT {}][ChunkResponse] frontend sender not found",
-                        state_guard.id
+                        "[{}, {}] frontend sender not found",
+                        file!(),
+                        line!()
                     ));
                 }
             }

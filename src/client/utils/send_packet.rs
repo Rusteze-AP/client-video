@@ -36,7 +36,9 @@ pub fn send_sc_packet(state_guard: &StateGuardReadT, packet: &Packet) -> Result<
         ));
     }
 
-    state_guard.logger.log_info("Sent packet to SC");
+    state_guard
+        .logger
+        .log_info(&format!("[{}, {}] sent packet to SC", file!(), line!()));
 
     Ok(())
 }

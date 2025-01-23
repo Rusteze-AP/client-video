@@ -41,7 +41,13 @@ impl Client {
         };
 
         if let Err(err) = send_packet(state_guard, &sender, packet) {
-            state_guard.logger.log_warn(&format!("[SERVER-{}][FLOOD RESPONSE] - Failed to forward packet to [DRONE-{}]. \n Error: {} \n Trying to use SC shortcut...", state_guard.id, packet.routing_header.current_hop().unwrap(), err));
+            state_guard.logger.log_warn(&format!(
+                "[{}, {}] failed to forward packet to [DRONE-{}] | err: {}",
+                file!(),
+                line!(),
+                packet.routing_header.current_hop().unwrap(),
+                err
+            ));
             // Send to SC
             let res = state_guard
                 .controller_send
@@ -49,12 +55,19 @@ impl Client {
 
             if res.is_err() {
                 return Err(format!(
-                    "[SERVER-{}][FLOOD RESPONSE] - Unable to forward packet to neither next hop nor SC. \n Packet: {}",
-                    state_guard.id, packet
+                    "[{}, {}] Unable to forward packet to neither next hop nor SC. \n Packet: {}",
+                    file!(),
+                    line!(),
+                    packet
                 ));
             }
 
-            state_guard.logger.log_debug(&format!("[SERVER-{}][FLOOD RESPONSE] - Successfully sent flood response through SC. Packet: {}", state_guard.id, packet));
+            state_guard.logger.log_debug(&format!(
+                "[{}, {}], successfully sent flood response through SC. Packet: {}",
+                file!(),
+                line!(),
+                packet
+            ));
         }
         Ok(())
     }
@@ -63,8 +76,13 @@ impl Client {
         let (dest, packet) = Self::build_flood_response(message);
         let res = Self::send_flood_response(state_guard, dest, &packet);
 
-        if let Err(msg) = res {
-            state_guard.logger.log_error(msg.as_str());
+        if let Err(err) = res {
+            state_guard.logger.log_error(&format!(
+                "[{}, {}] failed to send flood response, err: {}",
+                file!(),
+                line!(),
+                err
+            ));
         }
     }
 }
