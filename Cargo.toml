@@ -12,13 +12,14 @@ bytes = "1.5.0"
 base64 = "0.21.0"
 tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
 surrealdb = { version = "2.1.4", features = ["kv-mem"] }
+chrono = "0.4.39"
 
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = [
     "debug",
 ] }
 logger = { git = "https://github.com/Rusteze-AP/logger.git", branch = "main" }
-# packet_forge = { git = "ssh://git@github.com/Rusteze-AP/packetForge.git", branch = "main" }
+packet_forge = { git = "ssh://git@github.com/Rusteze-AP/packetForge.git", branch = "main" }
+routing-handler = { git = "ssh://git@github.com/Rusteze-AP/routing-handler.git", branch = "main" }
 
-packet_forge = { path = "../packet_forge" }
-routing-handler = { path = "../routing-handler" }
-chrono = "0.4.39"
+# packet_forge = { path = "../packet_forge" }
+# routing-handler = { path = "../routing-handler" }

@@ -63,7 +63,7 @@ impl Client {
             let mut state_guard = self.state.write().unwrap();
 
             // Disassemble the message into packets
-            let Ok(packets) = state_guard.packet_forge.disassemble(msg, srh) else {
+            let Ok(packets) = state_guard.packet_forge.disassemble(msg, &srh) else {
                 state_guard.logger.log_error(&format!(
                     "[{}, {}] disassemble failed",
                     file!(),
