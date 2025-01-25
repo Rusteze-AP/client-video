@@ -15,8 +15,8 @@ impl Client {
 
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
         let mut packet = flood_req.generate_response(1); // Note: returns with hop_index = 0;
-        packet.routing_header.increase_hop_index();
         let dest = packet.routing_header.current_hop();
+        packet.routing_header.increase_hop_index();
 
         if dest.is_none() {
             return (0, packet);
