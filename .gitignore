@@ -27,4 +27,4 @@ package-lock.json
 
 .DS_Store
 
-/static
+# /static
