@@ -14,19 +14,22 @@ use rocket::{Build, Config, Rocket};
 use routes::{client_events, request_video, request_video_list, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use surrealdb::engine::local::{Db, Mem};
+use surrealdb::engine::local::{Db, Mem, RocksDb};
 use surrealdb::Surreal;
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
 
-use crate::utils::pupulate_db;
+use crate::utils::{copy_directory, pupulate_db};
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
 type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
 type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
+
+const BASE_DB_PATH: &str = "db/client_video";
 
 pub(crate) struct ClientState {
     id: NodeId,
@@ -61,15 +64,44 @@ impl Client {
         command_recv: Receiver<DroneCommand>,
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
+        init_client_path: Option<&str>,
+        populate_db: bool,
     ) -> Self {
-        let db = Surreal::new::<Mem>(()).await.unwrap();
-        db.use_ns("video_client")
+        // Initialize logger
+        let mut logger = Logger::new(LogLevel::All as u8, false, format!("client-video-{id}"));
+        let db;
+
+        if let Some(init_client_path) = init_client_path {
+            // Copy db to client directory
+            let client_dir = format!("{BASE_DB_PATH}/client_{id}");
+            let init_db_path = format!("{init_client_path}/db");
+            match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
+                Ok(()) => logger.log_info("Database copied"),
+                Err(e) => logger.log_error(&format!("Failed to copy database: {e}")),
+            }
+
+            // Initialize directory db
+            db = Surreal::new::<RocksDb>(client_dir).await.unwrap();
+        } else {
+            // Initialize memory db
+            db = Surreal::new::<Mem>(()).await.unwrap();
+        }
+
+        db.use_ns("client_video")
             .use_db(format!("client_{id}"))
             .await
             .unwrap();
         let db = Arc::new(db);
-        // Initialize the database with some data
-        pupulate_db(&db.clone()).await.unwrap();
+
+        // Initialize db with some data
+        if init_client_path.is_some() && populate_db {
+            pupulate_db(&db.clone(), init_client_path.unwrap())
+                .await
+                .unwrap();
+            logger.log_info("Database populated");
+        }
+
+        logger.set_displayable(LogLevel::None as u8);
 
         let state = ClientState {
             id,
@@ -83,11 +115,7 @@ impl Client {
             video_sender: None,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
-            logger: Logger::new(
-                LogLevel::None as u8,
-                false,
-                format!("client-video-{id}"),
-            ),
+            logger,
             flood_id: 0,
         };
 
