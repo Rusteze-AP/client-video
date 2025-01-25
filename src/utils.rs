@@ -54,11 +54,11 @@ pub async fn pupulate_db(db: &Arc<Surreal<Db>>) -> surrealdb::Result<()> {
     try_join!(
         insert_gandalf_sax(
             db.clone(),
-            "../client/frontend/public/videos/gandalf_sax.mp4",
+            "initializations_files/client_video/gandalf_sax.mp4",
         ),
         insert_dancing_pirate(
             db.clone(),
-            "../client/frontend/public/videos/dancing_pirate.mp4",
+            "initializations_files/client_video/dancing_pirate.mp4",
         )
     )?;
 
