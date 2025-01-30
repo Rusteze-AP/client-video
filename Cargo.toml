@@ -18,8 +18,8 @@ wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features 
     "debug",
 ] }
 logger = { git = "https://github.com/Rusteze-AP/logger.git", branch = "main" }
-# packet_forge = { git = "ssh://git@github.com/Rusteze-AP/packet-forge.git", branch = "main" }
+packet_forge = { git = "ssh://git@github.com/Rusteze-AP/packet-forge.git", branch = "main" }
 routing-handler = { git = "ssh://git@github.com/Rusteze-AP/routing-handler.git", branch = "main" }
 
-packet_forge = { path = "../packet_forge" }
+# packet_forge = { path = "../packet_forge" }
 # routing-handler = { path = "../routing-handler" }
