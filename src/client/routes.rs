@@ -37,7 +37,7 @@ pub(crate) fn client_events(client: &State<Client>) -> EventStream![] {
     EventStream! {
         let mut interval = interval(Duration::from_secs(1));
         loop {
-            let id = client_state.read().unwrap().id;
+            let id = client_state.read().id;
             yield Event::data(id.to_string());
             interval.tick().await;
         }
@@ -48,8 +48,7 @@ pub(crate) fn client_events(client: &State<Client>) -> EventStream![] {
 pub(crate) fn video_stream(client: &State<Client>) -> EventStream![] {
     let (sender, _) = broadcast::channel::<Bytes>(1024);
     {
-        let mut state = client.state.write().unwrap();
-        state.video_sender = Some(sender.clone());
+        client.state.write().video_sender = Some(sender.clone());
     }
 
     let mut receiver = sender.subscribe();

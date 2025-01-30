@@ -27,7 +27,7 @@ fn get_flood_id(state_guard: &mut StateGuardWriteT) -> u64 {
 pub(crate) fn init_flood_request(state: &StateT) {
     // Get flood rquest data
     let (id, flood_id, senders, session_id) = {
-        let mut state_guard = state.write().unwrap();
+        let mut state_guard = state.write();
         (
             state_guard.id,
             get_flood_id(&mut state_guard),
@@ -53,7 +53,7 @@ pub(crate) fn init_flood_request(state: &StateT) {
 
         // Send to node
         {
-            let mut state_guard = state.write().unwrap();
+            let mut state_guard = state.write();
             if let Err(err) = send_packet(&mut state_guard, sender, &packet) {
                 state_guard.logger.log_error(&format!(
                     "[{}, {}] sending flood_req to [DRONE-{}] | err: {}",
@@ -67,7 +67,7 @@ pub(crate) fn init_flood_request(state: &StateT) {
 
         // Send to SC
         {
-            let state_guard = state.read().unwrap();
+            let state_guard = state.read();
             if let Err(err) = send_sc_packet(&state_guard, &packet) {
                 state_guard.logger.log_error(&format!(
                     "[{}, {}] failed to send flood_req to SC | err: {}",

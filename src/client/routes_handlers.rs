@@ -13,7 +13,7 @@ impl Client {
     async fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
         // Search for the video in the database
         let video_content = get_video_content(self.db.clone(), video_id).await;
-        let state_guard = self.state.read().unwrap();
+        let state_guard = self.state.read();
 
         match video_content {
             Ok(video_content) => {
@@ -60,7 +60,7 @@ impl Client {
         let srh = SourceRoutingHeader::new(hops, 1);
 
         let (packets, sender) = {
-            let mut state_guard = self.state.write().unwrap();
+            let mut state_guard = self.state.write();
 
             // Disassemble the message into packets
             let Ok(packets) = state_guard.packet_forge.disassemble(msg, &srh) else {
@@ -90,7 +90,7 @@ impl Client {
         for packet in packets {
             // Send to node
             {
-                let mut state_guard = self.state.write().unwrap();
+                let mut state_guard = self.state.write();
                 let res = send_packet(&mut state_guard, &sender, &packet);
                 if let Err(err) = res {
                     state_guard.logger.log_error(&format!(
@@ -104,7 +104,7 @@ impl Client {
 
             // Send to SC
             {
-                let state_guard = self.state.read().unwrap();
+                let state_guard = self.state.read();
                 let res = send_sc_packet(&state_guard, &packet);
                 if let Err(err) = res {
                     state_guard.logger.log_error(&format!(

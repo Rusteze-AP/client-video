@@ -9,14 +9,14 @@ use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
 use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT};
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
 use routes::{client_events, request_video, request_video_list, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::LazyLock;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, LazyLock};
 use surrealdb::engine::local::{Db, RocksDb};
 use surrealdb::Surreal;
 use tokio::sync::broadcast;
@@ -126,23 +126,21 @@ impl Client {
     /// Get the ID of the client
     /// # Errors
     /// May create deadlock if the `RwLock` is poisoned
-    /// # Panics
-    /// This function might panic when called if the lock is already held by the current thread.
     #[must_use]
     pub fn get_id(&self) -> NodeId {
-        self.state.read().unwrap().id
+        self.state.read().id
     }
 
     async fn init_db(&self, init_client_path: &str, populate_db: bool) {
-        let state_guard = self.state.read().unwrap();
-
         // Copy db to client directory
-        let client_dir = format!("{BASE_DB_PATH}/client_{}", state_guard.id);
+        let client_dir = format!("{BASE_DB_PATH}/client_{}", self.state.read().id);
         let init_db_path = format!("{init_client_path}/db");
 
         match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
-            Ok(()) => state_guard.logger.log_info("Database copied"),
-            Err(e) => state_guard
+            Ok(()) => self.state.read().logger.log_info("Database copied"),
+            Err(e) => self
+                .state
+                .read()
                 .logger
                 .log_error(&format!("Failed to copy database from {init_db_path}: {e}")),
         }
@@ -152,7 +150,8 @@ impl Client {
             pupulate_db(&self.db.clone(), init_client_path)
                 .await
                 .unwrap();
-            state_guard.logger.log_info("Database populated");
+
+            self.state.read().logger.log_info("Database populated");
         }
     }
 
@@ -182,8 +181,6 @@ impl Client {
     /// This function will block the current thread until the Rocket app is shut down
     /// # Errors
     /// If the Rocket app fails to launch
-    /// # Panics
-    /// This function might panic when called if the lock is already held by the current thread.
     async fn run(self, init_client_path: &str, populate_db: bool) {
         self.init_db(init_client_path, populate_db).await;
 
@@ -196,7 +193,7 @@ impl Client {
         // Monitor termination flag in a separate task
         let termination_handle = tokio::spawn(async move {
             loop {
-                if state.read().unwrap().terminated {
+                if state.read().terminated {
                     // Wait for processing thread to complete
                     let _ = processing_handle.join();
                     break;
