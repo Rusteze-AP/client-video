@@ -8,13 +8,14 @@ mod video_chunker;
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
-use packet_forge::{PacketForge, SessionIdT};
+use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT};
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
 use routes::{client_events, request_video, request_video_list, video_stream};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::LazyLock;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use surrealdb::engine::local::{Db, Mem, RocksDb};
 use surrealdb::Surreal;
@@ -31,6 +32,41 @@ type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
 
 const BASE_DB_PATH: &str = "db/client_video";
 
+static RT: LazyLock<tokio::runtime::Runtime> =
+    LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
+
+impl ClientT for Client {
+    fn new(
+        id: NodeId,
+        command_send: Sender<DroneEvent>,
+        command_recv: Receiver<DroneCommand>,
+        receiver: Receiver<Packet>,
+        senders: HashMap<NodeId, Sender<Packet>>,
+        init_client_path: &str,
+    ) -> Self {
+        RT.block_on(async {
+            Self::new(
+                id,
+                command_send,
+                command_recv,
+                receiver,
+                senders,
+                init_client_path,
+                false,
+            )
+            .await
+        })
+    }
+
+    fn run(self) {
+        RT.block_on(async { self.run().await })
+    }
+
+    fn get_id(&self) -> NodeId {
+        self.get_id()
+    }
+}
+
 pub(crate) struct ClientState {
     id: NodeId,
     controller_send: Sender<DroneEvent>,
@@ -45,6 +81,7 @@ pub(crate) struct ClientState {
     packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
     logger: Logger,
     flood_id: u64,
+    client_type: ClientType,
 }
 
 #[derive(Clone)]
@@ -58,18 +95,20 @@ impl Client {
     /// Create a new client
     /// # Panics
     /// This function might panic if the `Surreal` instance fails to initialize
-    pub async fn new(
+    async fn new(
         id: NodeId,
         command_send: Sender<DroneEvent>,
         command_recv: Receiver<DroneCommand>,
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
-        init_client_path: Option<&str>,
+        init_client_path: &str,
         populate_db: bool,
     ) -> Self {
         // Initialize logger
         let mut logger = Logger::new(LogLevel::All as u8, false, format!("client-video-{id}"));
         let db;
+
+        let init_client_path = Some(init_client_path);
 
         if let Some(init_client_path) = init_client_path {
             // Copy db to client directory
@@ -77,7 +116,9 @@ impl Client {
             let init_db_path = format!("{init_client_path}/db");
             match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
                 Ok(()) => logger.log_info("Database copied"),
-                Err(e) => logger.log_error(&format!("Failed to copy database: {e}")),
+                Err(e) => {
+                    logger.log_error(&format!("Failed to copy database from {init_db_path}: {e}"))
+                }
             }
 
             // Initialize directory db
@@ -117,6 +158,7 @@ impl Client {
             packets_history: HashMap::new(),
             logger,
             flood_id: 0,
+            client_type: ClientType::Video,
         };
 
         Client {
@@ -163,7 +205,7 @@ impl Client {
     /// If the Rocket app fails to launch
     /// # Panics
     /// This function might panic when called if the lock is already held by the current thread.
-    pub async fn run(self) {
+    async fn run(self) {
         let processing_handle = self.clone().start_message_processing();
         let state = self.state.clone();
 
