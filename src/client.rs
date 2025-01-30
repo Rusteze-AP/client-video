@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::LazyLock;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use surrealdb::engine::local::{Db, Mem, RocksDb};
+use surrealdb::engine::local::{Db, RocksDb};
 use surrealdb::Surreal;
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
@@ -31,6 +31,7 @@ type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
 type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
 
 const BASE_DB_PATH: &str = "db/client_video";
+const POPULATE_DB: bool = false;
 
 static RT: LazyLock<tokio::runtime::Runtime> =
     LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
@@ -42,24 +43,12 @@ impl ClientT for Client {
         command_recv: Receiver<DroneCommand>,
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
-        init_client_path: &str,
     ) -> Self {
-        RT.block_on(async {
-            Self::new(
-                id,
-                command_send,
-                command_recv,
-                receiver,
-                senders,
-                init_client_path,
-                false,
-            )
-            .await
-        })
+        RT.block_on(async { Self::new(id, command_send, command_recv, receiver, senders).await })
     }
 
-    fn run(self) {
-        RT.block_on(async { self.run().await })
+    fn run(self, init_client_path: &str) {
+        RT.block_on(async { self.run(init_client_path, POPULATE_DB).await });
     }
 
     fn get_id(&self) -> NodeId {
@@ -101,48 +90,15 @@ impl Client {
         command_recv: Receiver<DroneCommand>,
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
-        init_client_path: &str,
-        populate_db: bool,
     ) -> Self {
-        // Initialize logger
-        let mut logger = Logger::new(LogLevel::All as u8, false, format!("client-video-{id}"));
-        let db;
+        let client_dir = format!("{BASE_DB_PATH}/client_{id}");
 
-        let init_client_path = Some(init_client_path);
-
-        if let Some(init_client_path) = init_client_path {
-            // Copy db to client directory
-            let client_dir = format!("{BASE_DB_PATH}/client_{id}");
-            let init_db_path = format!("{init_client_path}/db");
-            match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
-                Ok(()) => logger.log_info("Database copied"),
-                Err(e) => {
-                    logger.log_error(&format!("Failed to copy database from {init_db_path}: {e}"))
-                }
-            }
-
-            // Initialize directory db
-            db = Surreal::new::<RocksDb>(client_dir).await.unwrap();
-        } else {
-            // Initialize memory db
-            db = Surreal::new::<Mem>(()).await.unwrap();
-        }
-
+        // Initialize directory db
+        let db = Surreal::new::<RocksDb>(client_dir).await.unwrap();
         db.use_ns("client_video")
             .use_db(format!("client_{id}"))
             .await
             .unwrap();
-        let db = Arc::new(db);
-
-        // Initialize db with some data
-        if init_client_path.is_some() && populate_db {
-            pupulate_db(&db.clone(), init_client_path.unwrap())
-                .await
-                .unwrap();
-            logger.log_info("Database populated");
-        }
-
-        logger.set_displayable(LogLevel::None as u8);
 
         let state = ClientState {
             id,
@@ -156,14 +112,14 @@ impl Client {
             video_sender: None,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
-            logger,
+            logger: Logger::new(LogLevel::All as u8, false, format!("client-video-{id}")),
             flood_id: 0,
             client_type: ClientType::Video,
         };
 
         Client {
             state: Arc::new(RwLock::new(state)),
-            db,
+            db: Arc::new(db),
         }
     }
 
@@ -175,6 +131,29 @@ impl Client {
     #[must_use]
     pub fn get_id(&self) -> NodeId {
         self.state.read().unwrap().id
+    }
+
+    async fn init_db(&self, init_client_path: &str, populate_db: bool) {
+        let state_guard = self.state.read().unwrap();
+
+        // Copy db to client directory
+        let client_dir = format!("{BASE_DB_PATH}/client_{}", state_guard.id);
+        let init_db_path = format!("{init_client_path}/db");
+
+        match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
+            Ok(()) => state_guard.logger.log_info("Database copied"),
+            Err(e) => state_guard
+                .logger
+                .log_error(&format!("Failed to copy database from {init_db_path}: {e}")),
+        }
+
+        // Initialize db with some data
+        if populate_db {
+            pupulate_db(&self.db.clone(), init_client_path)
+                .await
+                .unwrap();
+            state_guard.logger.log_info("Database populated");
+        }
     }
 
     #[must_use]
@@ -205,7 +184,9 @@ impl Client {
     /// If the Rocket app fails to launch
     /// # Panics
     /// This function might panic when called if the lock is already held by the current thread.
-    async fn run(self) {
+    async fn run(self, init_client_path: &str, populate_db: bool) {
+        self.init_db(init_client_path, populate_db).await;
+
         let processing_handle = self.clone().start_message_processing();
         let state = self.state.clone();
 
