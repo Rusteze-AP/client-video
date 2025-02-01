@@ -51,6 +51,10 @@ impl ClientT for Client {
         RT.block_on(async { self.run_internal(init_client_path, POPULATE_DB).await });
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn get_id(&self) -> NodeId {
         self.get_id()
     }
