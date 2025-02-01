@@ -47,8 +47,8 @@ impl ClientT for Client {
         RT.block_on(async { Self::new(id, command_send, command_recv, receiver, senders).await })
     }
 
-    fn run(self, init_client_path: &str) {
-        RT.block_on(async { self.run(init_client_path, POPULATE_DB).await });
+    fn run(self: Box<Self>, init_client_path: &str) {
+        RT.block_on(async { self.run_internal(init_client_path, POPULATE_DB).await });
     }
 
     fn get_id(&self) -> NodeId {
@@ -122,7 +122,6 @@ impl Client {
             db: Arc::new(db),
         }
     }
-
     /// Get the ID of the client
     /// # Errors
     /// May create deadlock if the `RwLock` is poisoned
@@ -181,7 +180,7 @@ impl Client {
     /// This function will block the current thread until the Rocket app is shut down
     /// # Errors
     /// If the Rocket app fails to launch
-    async fn run(self, init_client_path: &str, populate_db: bool) {
+    async fn run_internal(self, init_client_path: &str, populate_db: bool) {
         self.init_db(init_client_path, populate_db).await;
 
         let processing_handle = self.clone().start_message_processing();
