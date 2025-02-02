@@ -1,20 +1,19 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::Ack;
 
-use super::{Client, StateGuardWriteT};
+use crate::client::Client;
 
 impl Client {
-    pub(crate) fn handle_ack(
-        state_guard: &mut StateGuardWriteT,
-        ack: &Ack,
-        session_id: SessionIdT,
-    ) {
+    pub(crate) fn handle_ack(&self, ack: &Ack, session_id: SessionIdT) {
         // Remove packet from history
-        let res = state_guard
+        let res = self
+            .state
+            .write()
             .packets_history
             .remove(&(ack.fragment_index, session_id));
+
         if res.is_none() {
-            state_guard.logger.log_error(&format!(
+            self.state.read().logger.log_error(&format!(
                 "[{}, {}] failed to remove packet_history with id ({}, {})",
                 file!(),
                 line!(),

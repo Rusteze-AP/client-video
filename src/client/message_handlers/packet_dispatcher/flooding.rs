@@ -4,13 +4,14 @@ use wg_internal::{
     packet::{FloodRequest, FloodResponse, Packet},
 };
 
-use crate::client::utils::send_packet::send_packet;
-
-use super::{Client, StateGuardWriteT};
+use crate::client::{
+    utils::sends::{send_packet, send_sc_packet},
+    Client,
+};
 
 impl Client {
-    pub(crate) fn handle_flood_res(state_guard: &mut StateGuardWriteT, flood: FloodResponse) {
-        state_guard.routing_handler.update_graph(flood);
+    pub(crate) fn handle_flood_res(&self, flood: FloodResponse) {
+        self.state.write().routing_handler.update_graph(flood);
     }
 
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
@@ -25,44 +26,29 @@ impl Client {
         (dest.unwrap(), packet)
     }
 
-    fn send_flood_response(
-        state_guard: &mut StateGuardWriteT,
-        dest: NodeId,
-        packet: &Packet,
-    ) -> Result<(), String> {
+    fn send_flood_response(&self, dest: NodeId, packet: &Packet) -> Result<(), String> {
+        let state = &self.state;
+
         // Get sender
-        let sender = if let Some(s) = state_guard.senders.get(&dest) {
+        let sender = if let Some(s) = state.read().senders.get(&dest) {
             s.clone()
         } else {
-            return Err(format!(
-                "Client {}, error: sender {} not found",
-                state_guard.id, dest
-            ));
+            return Err(format!("sender {dest} not found"));
         };
 
-        if let Err(err) = send_packet(state_guard, &sender, packet) {
-            state_guard.logger.log_warn(&format!(
+        if let Err(err) = send_packet(state, &sender, packet) {
+            state.read().logger.log_warn(&format!(
                 "[{}, {}] failed to forward packet to [DRONE-{}] | err: {}",
                 file!(),
                 line!(),
                 packet.routing_header.current_hop().unwrap(),
                 err
             ));
+
             // Send to SC
-            let res = state_guard
-                .controller_send
-                .send(DroneEvent::ControllerShortcut(packet.clone()));
+            send_sc_packet(state, &DroneEvent::ControllerShortcut(packet.clone()))?;
 
-            if res.is_err() {
-                return Err(format!(
-                    "[{}, {}] Unable to forward packet to neither next hop nor SC. \n Packet: {}",
-                    file!(),
-                    line!(),
-                    packet
-                ));
-            }
-
-            state_guard.logger.log_debug(&format!(
+            state.read().logger.log_debug(&format!(
                 "[{}, {}], successfully sent flood response through SC. Packet: {}",
                 file!(),
                 line!(),
@@ -72,12 +58,12 @@ impl Client {
         Ok(())
     }
 
-    pub(crate) fn handle_flood_req(state_guard: &mut StateGuardWriteT, message: &FloodRequest) {
+    pub(crate) fn handle_flood_req(&self, message: &FloodRequest) {
         let (dest, packet) = Self::build_flood_response(message);
-        let res = Self::send_flood_response(state_guard, dest, &packet);
+        let res = self.send_flood_response(dest, &packet);
 
         if let Err(err) = res {
-            state_guard.logger.log_error(&format!(
+            self.state.read().logger.log_error(&format!(
                 "[{}, {}] failed to send flood response, err: {}",
                 file!(),
                 line!(),

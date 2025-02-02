@@ -4,10 +4,11 @@ mod packet_dispatcher;
 use crossbeam::channel::TryRecvError;
 use std::thread;
 
-use super::{utils::start_flooding::init_flood_request, Client, StateGuardWriteT, StateT};
+use super::{utils::start_flooding::init_flood_request, Client};
 
 impl Client {
-    fn start_flooding(state: StateT) {
+    fn start_flooding(&self) {
+        let state = self.state.clone();
         thread::spawn(move || {
             init_flood_request(&state);
         });
@@ -75,23 +76,27 @@ impl Client {
     pub(crate) fn start_message_processing(self) -> thread::JoinHandle<()> {
         let state = self.state.clone();
 
-        Self::start_flooding(state.clone());
+        self.start_flooding();
         // tokio::spawn(Self::send_subscribe_client(state.clone(), self.db.clone()));
 
         thread::spawn(move || {
             loop {
-                // Get mutable access to state
-                let mut state_guard = state.write();
+                // Get receivers without holding the lock
+                let (controller_recv, packet_recv) = (
+                    state.read().controller_recv.clone(),
+                    state.read().packet_recv.clone(),
+                );
 
-                if state_guard.terminated {
+                // If the client is terminated, break the loop
+                if state.read().terminated {
                     break;
                 }
 
-                match state_guard.controller_recv.try_recv() {
-                    Ok(command) => Self::command_dispatcher(&mut state_guard, &command),
+                match controller_recv.try_recv() {
+                    Ok(command) => Self::command_dispatcher(&state, &command),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
-                        state_guard.logger.log_error(&format!(
+                        state.read().logger.log_error(&format!(
                             "[{}, {}], error receiving command: {e:?}",
                             file!(),
                             line!()
@@ -99,19 +104,17 @@ impl Client {
                     }
                 }
 
-                match state_guard.packet_recv.try_recv() {
-                    Ok(packet) => Self::packet_dispatcher(&mut state_guard, packet),
+                match packet_recv.try_recv() {
+                    Ok(packet) => self.packet_dispatcher(&packet),
                     Err(TryRecvError::Empty) => {}
                     Err(e) => {
-                        state_guard.logger.log_error(&format!(
+                        state.read().logger.log_error(&format!(
                             "[{}, {}], error receiving packet: {e:?}, ",
                             file!(),
                             line!()
                         ));
                     }
                 }
-
-                // RwLock is automatically released here when state_guard goes out of scope
             }
         })
     }

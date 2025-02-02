@@ -1,18 +1,16 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::{Nack, NackType, Packet};
 
-use crate::client::utils::send_packet::send_packet;
-
-use super::{Client, StateGuardWriteT};
+use crate::client::{utils::sends::send_packet, Client, StateT};
 
 impl Client {
-    fn retransmit_packet(state_guard: &mut StateGuardWriteT, mut packet: Packet) {
+    fn retransmit_packet(state: &StateT, mut packet: Packet) {
         let dest = packet.routing_header.hops[packet.routing_header.hops.len()];
 
         // Retrieve new best path from server to client otherwise return
-        let client_id = state_guard.id;
-        let Some(srh) = state_guard.routing_handler.best_path(client_id, dest) else {
-            state_guard.logger.log_error(&format!(
+        let client_id = state.read().id;
+        let Some(srh) = state.write().routing_handler.best_path(client_id, dest) else {
+            state.read().logger.log_error(&format!(
                 "[{}, {}] best path not found from {client_id} to {dest}",
                 file!(),
                 line!()
@@ -25,10 +23,10 @@ impl Client {
         packet.routing_header = srh;
 
         // Get sender
-        let sender = if let Some(s) = state_guard.senders.get(&next_hop) {
+        let sender = if let Some(s) = state.read().senders.get(&next_hop) {
             s.clone()
         } else {
-            state_guard.logger.log_error(&format!(
+            state.read().logger.log_error(&format!(
                 "[{}, {}] sender {} not found",
                 file!(),
                 line!(),
@@ -37,11 +35,10 @@ impl Client {
             return;
         };
 
-        let res = send_packet(state_guard, &sender, &packet);
+        let res = send_packet(state, &sender, &packet);
 
         if let Err(err) = res {
-            state_guard.logger.log_error(err.as_str());
-            state_guard.logger.log_error(&format!(
+            state.read().logger.log_error(&format!(
                 "[{}, {}] failed to send packet | err: {}",
                 file!(),
                 line!(),
@@ -50,18 +47,17 @@ impl Client {
         }
     }
 
-    pub(crate) fn handle_nack(
-        state_guard: &mut StateGuardWriteT,
-        nack: &Nack,
-        session_id: SessionIdT,
-    ) {
+    pub(crate) fn handle_nack(&self, nack: &Nack, session_id: SessionIdT) {
+        let state = &self.state;
+
         // Retrieve the packet that generated the nack
-        let Some(packet) = state_guard
+        let Some(packet) = state
+            .read()
             .packets_history
             .get(&(nack.fragment_index, session_id))
             .cloned()
         else {
-            state_guard.logger.log_error(&format!(
+            state.read().logger.log_error(&format!(
                 "[{}, {}] failed to retrieve packet_history with id ({}, {})",
                 file!(),
                 line!(),
@@ -72,16 +68,16 @@ impl Client {
         };
 
         match nack.nack_type {
-            NackType::Dropped => Self::retransmit_packet(state_guard, packet),
+            NackType::Dropped => Self::retransmit_packet(state, packet),
             NackType::DestinationIsDrone => {
-                state_guard.logger.log_error(&format!(
+                state.read().logger.log_error(&format!(
                     "[{}, {}] received a Nack with DestinationIsDrone",
                     file!(),
                     line!()
                 ));
             }
             NackType::ErrorInRouting(id) => {
-                state_guard.logger.log_error(&format!(
+                state.read().logger.log_error(&format!(
                     "[{}, {}] received a Nack with ErrorInRouting: {}",
                     file!(),
                     line!(),
@@ -89,7 +85,7 @@ impl Client {
                 ));
             }
             NackType::UnexpectedRecipient(id) => {
-                state_guard.logger.log_error(&format!(
+                state.read().logger.log_error(&format!(
                     "[{}, {}] received a Nack with UnexpectedRecipient: {}",
                     file!(),
                     line!(),

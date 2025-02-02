@@ -9,7 +9,7 @@ use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
 use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT};
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::RwLock;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
 use routes::{client_events, request_video, request_video_list, video_stream};
@@ -27,8 +27,6 @@ use wg_internal::packet::{Fragment, Packet};
 use crate::utils::{copy_directory, pupulate_db};
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
-type StateGuardWriteT<'a> = RwLockWriteGuard<'a, ClientState>;
-type StateGuardReadT<'a> = RwLockReadGuard<'a, ClientState>;
 
 const BASE_DB_PATH: &str = "db/client_video";
 const POPULATE_DB: bool = false;
@@ -69,7 +67,6 @@ pub(crate) struct ClientState {
     packet_forge: PacketForge,
     packets_map: HashMap<u64, Vec<Fragment>>,
     terminated: bool,
-    video_sender: Option<broadcast::Sender<Bytes>>,
     routing_handler: RoutingHandler, // Topology graph
     packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
     logger: Logger,
@@ -81,6 +78,7 @@ pub(crate) struct ClientState {
 pub struct Client {
     state: Arc<RwLock<ClientState>>,
     db: Arc<Surreal<Db>>,
+    video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
 }
 
 impl Client {
@@ -113,7 +111,6 @@ impl Client {
             packet_forge: PacketForge::new(),
             packets_map: HashMap::new(),
             terminated: false,
-            video_sender: None,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
             logger: Logger::new(LogLevel::All as u8, false, format!("client-video-{id}")),
@@ -124,6 +121,7 @@ impl Client {
         Client {
             state: Arc::new(RwLock::new(state)),
             db: Arc::new(db),
+            video_sender: Arc::new(RwLock::new(None)),
         }
     }
     /// Get the ID of the client

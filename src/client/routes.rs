@@ -48,7 +48,7 @@ pub(crate) fn client_events(client: &State<Client>) -> EventStream![] {
 pub(crate) fn video_stream(client: &State<Client>) -> EventStream![] {
     let (sender, _) = broadcast::channel::<Bytes>(1024);
     {
-        client.state.write().video_sender = Some(sender.clone());
+        *client.video_sender.write() = Some(sender.clone());
     }
 
     let mut receiver = sender.subscribe();

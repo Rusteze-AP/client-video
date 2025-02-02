@@ -1,20 +1,20 @@
 use wg_internal::controller::DroneCommand;
 
-use super::{Client, StateGuardWriteT};
+use crate::client::{Client, StateT};
 
 impl Client {
-    pub(crate) fn command_dispatcher(state_guard: &mut StateGuardWriteT, command: &DroneCommand) {
+    pub(crate) fn command_dispatcher(state: &StateT, command: &DroneCommand) {
         match command {
             DroneCommand::Crash => {
-                state_guard.terminated = true;
+                state.write().terminated = true;
             }
             DroneCommand::AddSender(node_id, sender) => {
-                state_guard.senders.insert(*node_id, sender.clone());
+                state.write().senders.insert(*node_id, sender.clone());
             }
             DroneCommand::RemoveSender(node_id) => {
-                let res = state_guard.senders.remove(node_id);
+                let res = state.write().senders.remove(node_id);
                 if res.is_none() {
-                    state_guard.logger.log_error(&format!(
+                    state.read().logger.log_error(&format!(
                         "[{}, {}] failed remove, sender {node_id} not found",
                         file!(),
                         line!()
@@ -22,7 +22,7 @@ impl Client {
                 }
             }
             DroneCommand::SetPacketDropRate(_) => {
-                state_guard.logger.log_warn(&format!(
+                state.read().logger.log_error(&format!(
                     "[{}, {}] received a SetPacketDropRate command",
                     file!(),
                     line!()

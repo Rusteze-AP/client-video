@@ -1,11 +1,12 @@
 use wg_internal::{
+    controller::DroneEvent,
     network::SourceRoutingHeader,
     packet::{FloodRequest, NodeType, Packet},
 };
 
-use crate::client::{StateGuardWriteT, StateT};
+use crate::client::StateT;
 
-use super::send_packet::{send_packet, send_sc_packet};
+use super::sends::{send_packet, send_sc_packet};
 
 /// Returns the `PacketType` formatted as a `String`
 // fn get_packet_type(pt: &PacketType) -> String {
@@ -19,22 +20,17 @@ use super::send_packet::{send_packet, send_sc_packet};
 // }
 
 /// Returns the next `flood_id` and increments the current one
-fn get_flood_id(state_guard: &mut StateGuardWriteT) -> u64 {
-    state_guard.flood_id += 1;
-    state_guard.flood_id
+fn get_flood_id(state: &StateT) -> u64 {
+    state.write().flood_id += 1;
+    state.read().flood_id
 }
 
 pub(crate) fn init_flood_request(state: &StateT) {
     // Get flood rquest data
-    let (id, flood_id, senders, session_id) = {
-        let mut state_guard = state.write();
-        (
-            state_guard.id,
-            get_flood_id(&mut state_guard),
-            state_guard.senders.clone(),
-            state_guard.packet_forge.get_session_id(),
-        )
-    };
+    let flood_id = get_flood_id(state);
+    let id = state.read().id;
+    let senders = state.read().senders.clone();
+    let session_id = state.write().packet_forge.get_session_id();
 
     // Create flood request
     let flood_req = FloodRequest {
@@ -52,30 +48,24 @@ pub(crate) fn init_flood_request(state: &StateT) {
         );
 
         // Send to node
-        {
-            let mut state_guard = state.write();
-            if let Err(err) = send_packet(&mut state_guard, sender, &packet) {
-                state_guard.logger.log_error(&format!(
-                    "[{}, {}] sending flood_req to [DRONE-{}] | err: {}",
-                    file!(),
-                    line!(),
-                    target_id,
-                    err
-                ));
-            }
+        if let Err(err) = send_packet(state, sender, &packet) {
+            state.read().logger.log_error(&format!(
+                "[{}, {}] sending flood_req to [DRONE-{}] | err: {}",
+                file!(),
+                line!(),
+                target_id,
+                err
+            ));
         }
 
         // Send to SC
-        {
-            let state_guard = state.read();
-            if let Err(err) = send_sc_packet(&state_guard, &packet) {
-                state_guard.logger.log_error(&format!(
-                    "[{}, {}] failed to send flood_req to SC | err: {}",
-                    file!(),
-                    line!(),
-                    err
-                ));
-            }
+        if let Err(err) = send_sc_packet(state, &DroneEvent::PacketSent(packet)) {
+            state.read().logger.log_error(&format!(
+                "[{}, {}] failed to send flood_req to SC | err: {}",
+                file!(),
+                line!(),
+                err
+            ));
         }
     }
 }
