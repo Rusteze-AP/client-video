@@ -27,12 +27,21 @@ use wg_internal::packet::{Fragment, Packet};
 use crate::utils::{copy_directory, pupulate_db};
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
+type DbT = Arc<Surreal<Db>>;
 
 const BASE_DB_PATH: &str = "db/client_video";
 const POPULATE_DB: bool = false;
 
 static RT: LazyLock<tokio::runtime::Runtime> =
     LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
+
+#[derive(PartialEq)]
+enum FsmStatus {
+    Setup,      // Server not found
+    Idle,       // Server found but not connected
+    Running,    // Connected to server
+    Terminated, // Client terminated
+}
 
 impl ClientT for Client {
     fn new(
@@ -66,12 +75,13 @@ pub(crate) struct ClientState {
     senders: HashMap<NodeId, Sender<Packet>>,
     packet_forge: PacketForge,
     packets_map: HashMap<u64, Vec<Fragment>>,
-    terminated: bool,
+    fsm: FsmStatus,
     routing_handler: RoutingHandler, // Topology graph
     packets_history: HashMap<(u64, SessionIdT), Packet>, // (fragment_index, session_id) -> Packet
     logger: Logger,
     flood_id: u64,
     client_type: ClientType,
+    servers_id: Vec<NodeId>,
 }
 
 #[derive(Clone)]
@@ -110,12 +120,13 @@ impl Client {
             senders,
             packet_forge: PacketForge::new(),
             packets_map: HashMap::new(),
-            terminated: false,
+            fsm: FsmStatus::Setup,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
             logger: Logger::new(LogLevel::All as u8, false, format!("client-video-{id}")),
             flood_id: 0,
             client_type: ClientType::Video,
+            servers_id: Vec::new(),
         };
 
         Client {
@@ -194,7 +205,7 @@ impl Client {
         // Monitor termination flag in a separate task
         let termination_handle = tokio::spawn(async move {
             loop {
-                if state.read().terminated {
+                if state.read().fsm == FsmStatus::Terminated {
                     // Wait for processing thread to complete
                     let _ = processing_handle.join();
                     break;

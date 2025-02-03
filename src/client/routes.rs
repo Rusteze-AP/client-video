@@ -20,7 +20,7 @@ pub(crate) async fn request_video(client: &State<Client>, video_id: FileHash) {
 
 #[get("/req-video-list")]
 pub(crate) async fn request_video_list(client: &State<Client>) -> EventStream![] {
-    let videos_info = get_video_list(client.db.clone()).await.unwrap_or_default();
+    let videos_info = get_video_list(&client.db).await.unwrap_or_default();
 
     EventStream! {
         for video_info in videos_info {

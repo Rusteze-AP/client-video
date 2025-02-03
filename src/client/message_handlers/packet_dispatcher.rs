@@ -15,7 +15,7 @@ impl Client {
             PacketType::Ack(ack) => self.handle_ack(&ack, session_id),
             PacketType::Nack(nack) => self.handle_nack(&nack, session_id),
             PacketType::FloodRequest(flood) => self.handle_flood_req(&flood),
-            PacketType::FloodResponse(flood) => self.handle_flood_res(flood),
+            PacketType::FloodResponse(flood) => self.handle_flood_res(&flood),
         }
     }
 }

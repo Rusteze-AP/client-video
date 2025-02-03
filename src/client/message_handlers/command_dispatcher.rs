@@ -1,12 +1,12 @@
 use wg_internal::controller::DroneCommand;
 
-use crate::client::{Client, StateT};
+use crate::client::{Client, FsmStatus, StateT};
 
 impl Client {
     pub(crate) fn command_dispatcher(state: &StateT, command: &DroneCommand) {
         match command {
             DroneCommand::Crash => {
-                state.write().terminated = true;
+                state.write().fsm = FsmStatus::Terminated;
             }
             DroneCommand::AddSender(node_id, sender) => {
                 state.write().senders.insert(*node_id, sender.clone());

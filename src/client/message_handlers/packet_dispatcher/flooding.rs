@@ -1,7 +1,7 @@
 use wg_internal::{
     controller::DroneEvent,
     network::NodeId,
-    packet::{FloodRequest, FloodResponse, Packet},
+    packet::{FloodRequest, FloodResponse, NodeType, Packet},
 };
 
 use crate::client::{
@@ -10,8 +10,22 @@ use crate::client::{
 };
 
 impl Client {
-    pub(crate) fn handle_flood_res(&self, flood: FloodResponse) {
-        self.state.write().routing_handler.update_graph(flood);
+    pub(crate) fn handle_flood_res(&self, flood_res: &FloodResponse) {
+        self.state
+            .write()
+            .routing_handler
+            .update_graph(flood_res.clone());
+        for (id, node_type) in &flood_res.path_trace {
+            if *node_type == NodeType::Server && !self.state.read().servers_id.contains(id) {
+                self.state.write().servers_id.push(*id);
+                self.state.read().logger.log_info(&format!(
+                    "[{}, {}] added server id: {}",
+                    file!(),
+                    line!(),
+                    id
+                ));
+            }
+        }
     }
 
     fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {

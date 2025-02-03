@@ -1,13 +1,8 @@
-use packet_forge::{ChunkRequest, FileHash, Index};
-use wg_internal::{controller::DroneEvent, network::SourceRoutingHeader};
+use packet_forge::{ChunkRequest, FileHash, Index, MessageType};
 
 use crate::db::queries::get_video_content;
 
-use super::{
-    utils::sends::{send_packet, send_sc_packet},
-    video_chunker::get_video_chunks,
-    Client,
-};
+use super::{utils::sends::send_msg, video_chunker::get_video_chunks, Client};
 
 impl Client {
     async fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
@@ -54,61 +49,16 @@ impl Client {
     }
 
     pub(crate) fn request_video_from_network(&self, video_id: FileHash) {
-        let msg = ChunkRequest::new(self.get_id(), video_id, Index::All);
-        let hops = vec![20, 1, 30];
-        let dest = hops[1];
-        let srh = SourceRoutingHeader::new(hops, 1);
+        // Get source and destination id
+        let dest_id = self.state.read().servers_id[0];
 
-        let (packets, sender) = {
-            let mut state_guard = self.state.write();
+        // Create ChunkRequest
+        let msg = MessageType::ChunkRequest(ChunkRequest::new(self.get_id(), video_id, Index::All));
 
-            // Disassemble the message into packets
-            let Ok(packets) = state_guard.packet_forge.disassemble(msg, &srh) else {
-                state_guard.logger.log_error(&format!(
-                    "[{}, {}] disassemble failed",
-                    file!(),
-                    line!()
-                ));
-                return;
-            };
-
-            // Get sender
-            let sender = if let Some(s) = state_guard.senders.get(&dest) {
-                s.clone()
-            } else {
-                state_guard.logger.log_error(&format!(
-                    "[{}, {}] Sender {dest} not found",
-                    file!(),
-                    line!()
-                ));
-                return;
-            };
-
-            (packets, sender)
-        };
-
-        for packet in packets {
-            // Send to node
-            let res = send_packet(&self.state, &sender, &packet);
-            if let Err(err) = res {
-                self.state.read().logger.log_error(&format!(
-                    "[{}, {}] failed send packet: {:?}",
-                    file!(),
-                    line!(),
-                    err.as_str()
-                ));
-            }
-
-            // Send to SC
-            let res = send_sc_packet(&self.state, &DroneEvent::PacketSent(packet));
-            if let Err(err) = res {
-                self.state.read().logger.log_error(&format!(
-                    "[{}, {}] failed send sc packet: {:?}",
-                    file!(),
-                    line!(),
-                    err.as_str()
-                ));
-            }
+        // Send message
+        let res = send_msg(&self.state, dest_id, msg);
+        if let Err(err) = res {
+            self.state.read().logger.log_error(&err);
         }
     }
 

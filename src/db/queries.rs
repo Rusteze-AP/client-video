@@ -5,7 +5,7 @@ use surrealdb::{engine::local::Db, Surreal};
 
 use super::structures::Video;
 
-pub async fn get_video_list(db: Arc<Surreal<Db>>) -> surrealdb::Result<Vec<VideoMetaData>> {
+pub async fn get_video_list(db: &Arc<Surreal<Db>>) -> surrealdb::Result<Vec<VideoMetaData>> {
     db.query("SELECT VALUE metadata FROM video").await?.take(0)
 }
 

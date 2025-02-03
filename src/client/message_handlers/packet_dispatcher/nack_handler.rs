@@ -36,14 +36,8 @@ impl Client {
         };
 
         let res = send_packet(state, &sender, &packet);
-
         if let Err(err) = res {
-            state.read().logger.log_error(&format!(
-                "[{}, {}] failed to send packet | err: {}",
-                file!(),
-                line!(),
-                err
-            ));
+            state.read().logger.log_error(&err);
         }
     }
 
