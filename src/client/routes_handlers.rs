@@ -50,6 +50,8 @@ impl Client {
 
     pub(crate) fn request_video_from_network(&self, video_id: FileHash) {
         // Get source and destination id
+        //TODO possible panic if servers_id is empty
+        //TODO this may be a client
         let dest_id = self.state.read().servers_id[0];
 
         // Create ChunkRequest

@@ -303,6 +303,12 @@ const VideoStreamer: React.FC = () => {
                                     key={index}
                                     className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
                                 >
+                                    <button
+                                        onClick={() => requestVideo(video.id)}
+                                        className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                    >
+                                        Request Video
+                                    </button>
                                     <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
                                     <p className="text-gray-600 mb-2">{video.description}</p>
                                     <div className="text-sm text-gray-500">
