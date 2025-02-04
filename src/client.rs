@@ -41,10 +41,10 @@ static RT: LazyLock<tokio::runtime::Runtime> =
 
 #[derive(Debug, PartialEq, Clone)]
 enum FsmStatus {
-    Setup,      // Server not found
-    Idle,       // Server found but not connected
-    Running,    // Connected to server
-    Terminated, // Client terminated
+    ServerNotFound,        // Server not found
+    NotSubscribedToServer, // Server found but not connected
+    SubscribedToServer,    // Connected to server
+    Terminated,            // Client terminated
 }
 
 impl Display for FsmStatus {
@@ -131,7 +131,7 @@ impl Client {
             senders,
             packet_forge: PacketForge::new(),
             packets_map: HashMap::new(),
-            fsm: FsmStatus::Setup,
+            fsm: FsmStatus::ServerNotFound,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
             logger: Logger::new(LogLevel::All as u8, false, format!("client-video-{id}")),

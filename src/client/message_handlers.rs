@@ -28,7 +28,9 @@ impl Client {
                     break;
                 }
 
-                if state.read().fsm == FsmStatus::Setup && !state.read().servers_id.is_empty() {
+                if state.read().fsm == FsmStatus::ServerNotFound
+                    && !state.read().servers_id.is_empty()
+                {
                     state.read().logger.log_info(&format!(
                         "[{}, {}] sending subscribe client message",
                         file!(),
@@ -36,7 +38,7 @@ impl Client {
                     ));
 
                     RT.block_on(self.send_subscribe_client(&self.db));
-                    state.write().fsm = FsmStatus::Idle;
+                    state.write().fsm = FsmStatus::NotSubscribedToServer;
                 }
 
                 let controller_recv = state.read().controller_recv.clone();

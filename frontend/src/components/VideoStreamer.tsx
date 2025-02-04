@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import Player from "video.js/dist/types/player";
 import "video.js/dist/video-js.css";
+import { Download, RefreshCw } from "lucide-react";
 
 interface VideoJSOptions {
     controls: boolean;
@@ -22,6 +23,13 @@ type VideoMetadata = {
     created_at: string;
 };
 
+enum FSMStatus {
+    ServerNotFound = "ServerNotFound",
+    NotSubscribedToServer = "NotSubscribedToServer",
+    SubscribedToServer = "SubscribedToServer",
+    Terminated = "Terminated",
+}
+
 const VideoStreamer: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const playerRef = useRef<Player | null>(null);
@@ -31,6 +39,7 @@ const VideoStreamer: React.FC = () => {
     const [videos, setVideos] = useState<VideoMetadata[]>([]);
     const [videosFromServer, setVideosFromServer] = useState<VideoMetadata[]>([]);
     const [fsmStatus, setFsmStatus] = useState<string>("Setup");
+    const [selectedVideo, setSelectedVideo] = useState<VideoMetadata | null>(null);
 
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
@@ -104,7 +113,7 @@ const VideoStreamer: React.FC = () => {
     };
 
     useEffect(() => {
-        if (fsmStatus === "Idle" || fsmStatus === "Running") {
+        if (fsmStatus === FSMStatus.SubscribedToServer) {
             requestVideoListFromServer();
         }
     }, [fsmStatus]);
@@ -114,6 +123,7 @@ const VideoStreamer: React.FC = () => {
         if (!videoRef.current) return;
 
         requestVideoList();
+        // requestVideoListFromServer();
 
         // New EventSource for video list from server
         const videoListFromServer = new EventSource("/video-list-from-server");
@@ -224,107 +234,118 @@ const VideoStreamer: React.FC = () => {
     }, []);
 
     return (
-        <div className="w-full max-w-4xl mx-auto p-4">
-            <div className="fixed top-4 right-4 bg-gray-100 p-2 rounded shadow">
-                <p>
-                    System Status:{" "}
-                    <span
-                        className={`font-bold ${
-                            fsmStatus === "Running"
-                                ? "text-green-600"
-                                : fsmStatus === "Idle"
-                                ? "text-yellow-600"
-                                : fsmStatus === "Terminated"
-                                ? "text-red-600"
-                                : "text-gray-600"
-                        }`}
-                    >
-                        {fsmStatus}
-                    </span>
-                </p>
-                <button onClick={requestVideoListFromServer}>Get video list from server</button>
-            </div>
-
-            <div>
-                <video
-                    ref={videoRef}
-                    className="video-js vjs-big-play-centered"
-                    controls
-                    preload="auto"
-                    width={640}
-                    height={360}
-                    data-setup="{}"
-                >
-                    <p className="vjs-no-js">
-                        To view this video, please enable JavaScript and consider upgrading to a web browser that
-                        supports HTML5 video.
-                    </p>
-                </video>
-            </div>
-
-            <div className="p-4">
-                <h1 className="text-2xl font-bold mb-6">Available Videos</h1>
-                <div className="grid gap-4">
-                    <div>
-                        <h1 className="text-xl font-bold mb-4">Local Videos</h1>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {videos.map((video, index) => (
-                                <div
-                                    key={index}
-                                    className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-                                >
-                                    <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
-                                    <button
-                                        onClick={() => requestVideo(video.id)}
-                                        className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                    >
-                                        Request Video
-                                    </button>
-                                    <p className="text-gray-600 mb-2">{video.description}</p>
-                                    <div className="text-sm text-gray-500">
-                                        <p>Type: {video.mime_type}</p>
-                                        <p>Duration: {video.duration}s</p>
-                                        <p>Added: {video.created_at}</p>
-                                        <p>ID: {video.id}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {videos.length === 0 && (
-                            <div className="text-center text-gray-500 mt-8">No videos available</div>
-                        )}
-                    </div>
-
-                    <div>
-                        <h1 className="text-xl font-bold mt-8 mb-4">Videos from Server</h1>
-                        <div className="grid gap-4 md:grid-cols-2">
-                            {videosFromServer.map((video, index) => (
-                                <div
-                                    key={index}
-                                    className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-                                >
-                                    <button
-                                        onClick={() => requestVideo(video.id)}
-                                        className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                                    >
-                                        Request Video
-                                    </button>
-                                    <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
-                                    <p className="text-gray-600 mb-2">{video.description}</p>
-                                    <div className="text-sm text-gray-500">
-                                        <p>Type: {video.mime_type}</p>
-                                        <p>Duration: {video.duration}s</p>
-                                        <p>Added: {video.created_at}</p>
-                                        <p>ID: {video.id}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                        {videosFromServer.length === 0 && (
-                            <div className="text-center text-gray-500 mt-8">No videos from server available</div>
-                        )}
+        <div className="min-h-screen bg-gray-900 text-white">
+            <div className="container mx-auto px-4 py-8">
+                {/* Status Indicator */}
+                <div className="fixed top-4 right-4 z-50">
+                    <div className="flex items-center space-x-2 bg-gray-800 rounded-full px-4 py-2 shadow-lg">
+                        <div
+                            className={`w-3 h-3 rounded-full ${
+                                fsmStatus === FSMStatus.NotSubscribedToServer
+                                    ? "bg-yellow-500"
+                                    : fsmStatus === FSMStatus.SubscribedToServer
+                                    ? "bg-green-500"
+                                    : fsmStatus === FSMStatus.Terminated
+                                    ? "bg-red-500"
+                                    : "bg-gray-500"
+                            }`}
+                        />
+                        <span className="text-sm font-medium">{fsmStatus}</span>
+                        <button
+                            onClick={() => requestVideoListFromServer()}
+                            className="text-blue-400 hover:text-blue-300 transition-colors"
+                        >
+                            <RefreshCw size={16} />
+                        </button>
                     </div>
                 </div>
+
+                {/* Video Player Section */}
+                <div className="grid md:grid-cols-3 gap-8">
+                    {/* Video Player */}
+                    <div className="md:col-span-2 rounded-xl overflow-hidden shadow-2xl">
+                        <video
+                            ref={videoRef}
+                            className="video-js vjs-big-play-centered w-full"
+                            controls
+                            preload="auto"
+                            data-setup="{}"
+                        >
+                            <p className="vjs-no-js">To view this video, please enable JavaScript.</p>
+                        </video>
+
+                        {selectedVideo && (
+                            <div className="p-4 bg-gray-700">
+                                <h2 className="text-xl font-bold">{selectedVideo.title}</h2>
+                                <p className="text-gray-300">{selectedVideo.description}</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Video Lists */}
+                    <div className="space-y-6">
+                        <div>
+                            <h2 className="text-2xl font-bold mb-4 text-gray-200">Local Videos</h2>
+                            <div className="space-y-4">
+                                {videos.map((video) => (
+                                    <VideoCard
+                                        key={video.id}
+                                        video={video}
+                                        onSelect={() => {
+                                            setSelectedVideo(video);
+                                            requestVideo(video.id);
+                                        }}
+                                    />
+                                ))}
+                                {videos.length === 0 && <p className="text-gray-500 text-center">No local videos</p>}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h2 className="text-2xl font-bold mb-4 text-gray-200">Server Videos</h2>
+                            <div className="space-y-4">
+                                {videosFromServer.map((video) => (
+                                    <VideoCard
+                                        key={video.id}
+                                        video={video}
+                                        onSelect={() => {
+                                            setSelectedVideo(video);
+                                            requestVideo(video.id);
+                                        }}
+                                    />
+                                ))}
+                                {videosFromServer.length === 0 && (
+                                    <p className="text-gray-500 text-center">No server videos</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Separate component for video cards
+const VideoCard: React.FC<{
+    video: VideoMetadata;
+    onSelect: () => void;
+}> = ({ video, onSelect }) => {
+    return (
+        <div
+            className="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition-colors cursor-pointer group"
+            onClick={onSelect}
+        >
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold text-gray-200 group-hover:text-blue-400 transition-colors">
+                    {video.title}
+                </h3>
+                <Download size={20} className="text-gray-500 hover:text-blue-500 transition-colors" />
+            </div>
+            <p className="text-gray-400 text-sm mb-2">{video.description}</p>
+            <div className="flex justify-between text-xs text-gray-500">
+                <span>{video.mime_type}</span>
+                <span>{video.duration}s</span>
             </div>
         </div>
     );

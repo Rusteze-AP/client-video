@@ -23,12 +23,12 @@ impl Client {
                 ));
 
                 // Once the client is subscribed, set the FSM to running
-                self.state.write().fsm = FsmStatus::Running;
+                self.state.write().fsm = FsmStatus::SubscribedToServer;
             }
             MessageType::ResponseFileList(content) => {
                 let fsm_state = self.state.read().fsm.clone();
-                if fsm_state == FsmStatus::Idle {
-                    self.state.write().fsm = FsmStatus::Running;
+                if fsm_state == FsmStatus::NotSubscribedToServer {
+                    self.state.write().fsm = FsmStatus::SubscribedToServer;
                 }
 
                 // Convert FileMetadata to VideoMetaData
