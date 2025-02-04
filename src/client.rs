@@ -8,13 +8,17 @@ mod video_chunker;
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
-use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT};
+use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT, VideoMetaData};
 use parking_lot::RwLock;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
-use routes::{client_events, request_video, request_video_list, video_stream};
+use routes::{
+    fsm_status, get_id, req_video_list_from_server, request_video, request_video_list_from_db,
+    video_list_from_server, video_stream,
+};
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use surrealdb::engine::local::{Db, RocksDb};
@@ -35,12 +39,18 @@ const POPULATE_DB: bool = false;
 static RT: LazyLock<tokio::runtime::Runtime> =
     LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum FsmStatus {
     Setup,      // Server not found
     Idle,       // Server found but not connected
     Running,    // Connected to server
     Terminated, // Client terminated
+}
+
+impl Display for FsmStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl ClientT for Client {
@@ -89,6 +99,7 @@ pub struct Client {
     state: Arc<RwLock<ClientState>>,
     db: Arc<Surreal<Db>>,
     video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
+    file_list_sender: Arc<RwLock<Option<broadcast::Sender<Vec<VideoMetaData>>>>>,
 }
 
 impl Client {
@@ -133,6 +144,7 @@ impl Client {
             state: Arc::new(RwLock::new(state)),
             db: Arc::new(db),
             video_sender: Arc::new(RwLock::new(None)),
+            file_list_sender: Arc::new(RwLock::new(None)),
         }
     }
     /// Get the ID of the client
@@ -180,10 +192,13 @@ impl Client {
             .mount(
                 "/",
                 routes![
-                    client_events,
+                    get_id,
+                    fsm_status,
                     video_stream,
                     request_video,
-                    request_video_list
+                    request_video_list_from_db,
+                    video_list_from_server,
+                    req_video_list_from_server
                 ],
             )
             .mount("/", FileServer::from(relative!("static")))

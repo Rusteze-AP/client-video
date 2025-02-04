@@ -20,16 +20,9 @@ impl Client {
         let state = self.state.clone();
 
         self.start_flooding();
-        // tokio::spawn(Self::send_subscribe_client(state.clone(), self.db.clone()));
 
         thread::spawn(move || {
             loop {
-                // Get receivers without holding the lock
-                let (controller_recv, packet_recv) = (
-                    state.read().controller_recv.clone(),
-                    state.read().packet_recv.clone(),
-                );
-
                 // If the client is terminated, break the loop
                 if state.read().fsm == FsmStatus::Terminated {
                     break;
@@ -46,6 +39,7 @@ impl Client {
                     state.write().fsm = FsmStatus::Idle;
                 }
 
+                let controller_recv = state.read().controller_recv.clone();
                 match controller_recv.try_recv() {
                     Ok(command) => Self::command_dispatcher(&state, &command),
                     Err(TryRecvError::Empty) => {}
@@ -58,6 +52,7 @@ impl Client {
                     }
                 }
 
+                let packet_recv = state.read().packet_recv.clone();
                 match packet_recv.try_recv() {
                     Ok(packet) => self.packet_dispatcher(&packet),
                     Err(TryRecvError::Empty) => {}

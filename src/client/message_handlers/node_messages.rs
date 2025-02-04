@@ -1,4 +1,4 @@
-use packet_forge::{FileMetadata, MessageType, SubscribeClient};
+use packet_forge::{FileMetadata, MessageType, RequestFileList, SubscribeClient};
 
 use crate::{
     client::{utils::sends::send_msg, Client, DbT},
@@ -24,6 +24,20 @@ impl Client {
         ));
 
         // Get source and destination id
+        let dest_id = self.state.read().servers_id[0];
+
+        // Send message
+        let res = send_msg(&self.state, dest_id, msg);
+        if let Err(err) = res {
+            self.state.read().logger.log_error(&err);
+        }
+    }
+
+    pub(crate) fn send_req_file_list(&self) {
+        println!("Sending request file list");
+        // Create a RequestFileList message
+        let msg = MessageType::RequestFileList(RequestFileList::new(self.get_id()));
+        //TODO possible panic if servers_id is empty
         let dest_id = self.state.read().servers_id[0];
 
         // Send message

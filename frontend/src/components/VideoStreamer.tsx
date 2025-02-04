@@ -13,7 +13,7 @@ interface VideoJSOptions {
     }[];
 }
 
-type VideoInfo = {
+type VideoMetadata = {
     id: number;
     title: string;
     description: string;
@@ -28,7 +28,9 @@ const VideoStreamer: React.FC = () => {
     const mediaSourceRef = useRef<MediaSource | null>(null);
     const sourceBufferRef = useRef<SourceBuffer | null>(null);
 
-    const [videos, setVideos] = useState<VideoInfo[]>([]);
+    const [videos, setVideos] = useState<VideoMetadata[]>([]);
+    const [videosFromServer, setVideosFromServer] = useState<VideoMetadata[]>([]);
+    const [fsmStatus, setFsmStatus] = useState<string>("Setup");
 
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
@@ -47,9 +49,7 @@ const VideoStreamer: React.FC = () => {
             const response = await fetch(`/req-video/${video_name}`, {
                 method: "GET",
             });
-            if (response.ok) {
-                console.log("Message sent successfully:", await response.text());
-            } else {
+            if (!response.ok) {
                 console.error("Failed to send message:", response.status);
             }
         } catch (error) {
@@ -59,7 +59,7 @@ const VideoStreamer: React.FC = () => {
 
     const requestVideoList = async (): Promise<void> => {
         try {
-            const response = await fetch("/req-video-list", {
+            const response = await fetch("/req-video-list-from-db", {
                 method: "GET",
             });
             if (response.ok) {
@@ -80,11 +80,64 @@ const VideoStreamer: React.FC = () => {
         }
     };
 
+    const requestVideoListFromServer = async (): Promise<void> => {
+        try {
+            const response = await fetch("/req-video-list-from-server", {
+                method: "GET",
+            });
+            if (response.ok) {
+                const text = await response.text();
+                // Parse the SSE format
+                const parsedVideos = text
+                    .trim()
+                    .split("\n")
+                    .filter((line) => line.startsWith("data:"))
+                    .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
+
+                setVideosFromServer(parsedVideos);
+            } else {
+                console.error("Failed to fetch videos from server:", response.status);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+        }
+    };
+
+    useEffect(() => {
+        if (fsmStatus === "Idle" || fsmStatus === "Running") {
+            requestVideoListFromServer();
+        }
+    }, [fsmStatus]);
+
     useEffect(() => {
         // Initialize video player
         if (!videoRef.current) return;
 
         requestVideoList();
+
+        // New EventSource for video list from server
+        const videoListFromServer = new EventSource("/video-list-from-server");
+        videoListFromServer.onmessage = function (event) {
+            try {
+                const data = JSON.parse(event.data);
+                setVideosFromServer(data);
+            } catch (error) {
+                console.error("Error parsing video list from server:", error);
+                setVideosFromServer([]);
+            }
+        };
+
+        // New EventSource for fsm
+        const fsmStatusSource = new EventSource("/fsm-status");
+        fsmStatusSource.onmessage = function (event) {
+            try {
+                // Directly set the FSM status string
+                setFsmStatus(event.data);
+            } catch (error) {
+                console.error("Error parsing FSM status:", error);
+                setFsmStatus("Setup"); // Default to Setup on error
+            }
+        };
 
         mediaSourceRef.current = new MediaSource();
         const videoURL = URL.createObjectURL(mediaSourceRef.current);
@@ -172,12 +225,25 @@ const VideoStreamer: React.FC = () => {
 
     return (
         <div className="w-full max-w-4xl mx-auto p-4">
-            {/* <button
-                onClick={() => requestVideo("dancing_pirate")}
-                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-            >
-                Request Video
-            </button> */}
+            <div className="fixed top-4 right-4 bg-gray-100 p-2 rounded shadow">
+                <p>
+                    System Status:{" "}
+                    <span
+                        className={`font-bold ${
+                            fsmStatus === "Running"
+                                ? "text-green-600"
+                                : fsmStatus === "Idle"
+                                ? "text-yellow-600"
+                                : fsmStatus === "Terminated"
+                                ? "text-red-600"
+                                : "text-gray-600"
+                        }`}
+                    >
+                        {fsmStatus}
+                    </span>
+                </p>
+                <button onClick={requestVideoListFromServer}>Get video list from server</button>
+            </div>
 
             <div>
                 <video
@@ -198,27 +264,61 @@ const VideoStreamer: React.FC = () => {
 
             <div className="p-4">
                 <h1 className="text-2xl font-bold mb-6">Available Videos</h1>
-                <div className="grid gap-4 md:grid-cols-2">
-                    {videos.map((video, index) => (
-                        <div key={index} className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                            <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
-                            <button
-                                onClick={() => requestVideo(video.id)}
-                                className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                            >
-                                Request Video
-                            </button>
-                            <p className="text-gray-600 mb-2">{video.description}</p>
-                            <div className="text-sm text-gray-500">
-                                <p>Type: {video.mime_type}</p>
-                                <p>Duration: {video.duration}s</p>
-                                <p>Added: {video.created_at}</p>
-                                <p>ID: {video.id}</p>
-                            </div>
+                <div className="grid gap-4">
+                    <div>
+                        <h1 className="text-xl font-bold mb-4">Local Videos</h1>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {videos.map((video, index) => (
+                                <div
+                                    key={index}
+                                    className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                    <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
+                                    <button
+                                        onClick={() => requestVideo(video.id)}
+                                        className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                    >
+                                        Request Video
+                                    </button>
+                                    <p className="text-gray-600 mb-2">{video.description}</p>
+                                    <div className="text-sm text-gray-500">
+                                        <p>Type: {video.mime_type}</p>
+                                        <p>Duration: {video.duration}s</p>
+                                        <p>Added: {video.created_at}</p>
+                                        <p>ID: {video.id}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
+                        {videos.length === 0 && (
+                            <div className="text-center text-gray-500 mt-8">No videos available</div>
+                        )}
+                    </div>
+
+                    <div>
+                        <h1 className="text-xl font-bold mt-8 mb-4">Videos from Server</h1>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {videosFromServer.map((video, index) => (
+                                <div
+                                    key={index}
+                                    className="border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                    <h2 className="text-lg font-semibold mb-2">{video.title}</h2>
+                                    <p className="text-gray-600 mb-2">{video.description}</p>
+                                    <div className="text-sm text-gray-500">
+                                        <p>Type: {video.mime_type}</p>
+                                        <p>Duration: {video.duration}s</p>
+                                        <p>Added: {video.created_at}</p>
+                                        <p>ID: {video.id}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {videosFromServer.length === 0 && (
+                            <div className="text-center text-gray-500 mt-8">No videos from server available</div>
+                        )}
+                    </div>
                 </div>
-                {videos.length === 0 && <div className="text-center text-gray-500 mt-8">No videos available</div>}
             </div>
         </div>
     );

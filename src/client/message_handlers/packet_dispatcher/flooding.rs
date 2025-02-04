@@ -28,9 +28,12 @@ impl Client {
         }
     }
 
-    fn build_flood_response(flood_req: &FloodRequest) -> (NodeId, Packet) {
+    fn build_flood_response(flood_req: &FloodRequest, client_id: NodeId) -> (NodeId, Packet) {
+        let mut flood_req = flood_req.clone();
+        flood_req.path_trace.push((client_id, NodeType::Client));
+
         let mut packet = flood_req.generate_response(1); // Note: returns with hop_index = 0;
-        let dest = packet.routing_header.current_hop();
+        let dest = packet.routing_header.next_hop();
         packet.routing_header.increase_hop_index();
 
         if dest.is_none() {
@@ -73,7 +76,8 @@ impl Client {
     }
 
     pub(crate) fn handle_flood_req(&self, message: &FloodRequest) {
-        let (dest, packet) = Self::build_flood_response(message);
+        let id = self.get_id();
+        let (dest, packet) = Self::build_flood_response(message, id);
         let res = self.send_flood_response(dest, &packet);
 
         if let Err(err) = res {

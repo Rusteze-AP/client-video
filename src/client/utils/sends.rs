@@ -81,16 +81,17 @@ pub fn send_msg(state: &StateT, dest_id: NodeId, msg: MessageType) -> Result<(),
 }
 
 /// Send an `Ack` to `sender_id`
-pub fn send_ack(state: &StateT, sender_id: NodeId, packet: &Packet) -> Result<(), String> {
+pub fn send_ack(state: &StateT, packet: &Packet) -> Result<(), String> {
+    let mut srh = packet.routing_header.get_reversed();
+    srh.increase_hop_index();
+    let sender_id = srh.hops[1];
+    let packet = Packet::new_ack(srh, packet.session_id, packet.get_fragment_index());
+
     let sender = if let Some(s) = state.read().senders.get(&sender_id) {
         s.clone()
     } else {
         return Err(format!("sender {sender_id} not found"));
     };
-
-    let mut srh = packet.routing_header.get_reversed();
-    srh.increase_hop_index();
-    let packet = Packet::new_ack(srh, packet.session_id, packet.get_fragment_index());
 
     if let Err(e) = sender.send(packet.clone()) {
         return Err(format!(
