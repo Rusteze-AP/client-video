@@ -5,7 +5,10 @@ use crate::client::Client;
 
 impl Client {
     pub(crate) fn handle_ack(&self, packet: &Packet, ack: &Ack, session_id: SessionIdT) {
-        self.state.write().routing_handler.nodes_ack(packet.routing_header.clone());
+        self.state
+            .write()
+            .routing_handler
+            .nodes_ack(packet.routing_header.clone());
 
         // Remove packet from history
         let res = self

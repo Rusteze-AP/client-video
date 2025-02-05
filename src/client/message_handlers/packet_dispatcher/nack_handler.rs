@@ -5,7 +5,7 @@ use crate::client::{utils::sends::send_packet, Client, StateT};
 
 impl Client {
     fn retransmit_packet(state: &StateT, mut packet: Packet) {
-        let dest = packet.routing_header.hops[packet.routing_header.hops.len()];
+        let dest = packet.routing_header.hops[packet.routing_header.hops.len() - 1];
 
         // Retrieve new best path from server to client otherwise return
         let client_id = state.read().id;
