@@ -75,15 +75,10 @@ pub(crate) fn video_list_from_server(client: &State<Client>) -> EventStream![] {
     let mut receiver = sender.subscribe();
 
     EventStream! {
-        loop {
-            match receiver.recv().await {
-                Ok(video_metadata) => {
-                    let json_metadata = serde_json::to_string(&video_metadata)
-                        .unwrap_or_else(|_| "[]".to_string());
-                    yield Event::data(json_metadata);
-                }
-                Err(_) => break,
-            }
+        while let Ok(video_metadata) = receiver.recv().await {
+            let json_metadata =
+                serde_json::to_string(&video_metadata).unwrap_or_else(|_| "[]".to_string());
+            yield Event::data(json_metadata);
         }
     }
 }

@@ -9,6 +9,12 @@ use crate::client::Client;
 
 impl Client {
     pub(crate) fn packet_dispatcher(&self, packet: &Packet) {
+        // Update routing_handler
+        self.state
+            .write()
+            .routing_handler
+            .nodes_congestion(packet.routing_header.clone());
+
         let session_id = packet.session_id;
         match packet.pack_type.clone() {
             PacketType::MsgFragment(frag) => self.handle_fragment(packet, frag, session_id),

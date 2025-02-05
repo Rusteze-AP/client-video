@@ -10,7 +10,7 @@ pub async fn get_video_list(db: &Arc<Surreal<Db>>) -> surrealdb::Result<Vec<Vide
 }
 
 pub async fn get_video_content(
-    db: Arc<Surreal<Db>>,
+    db: &Arc<Surreal<Db>>,
     video_id: FileHash,
 ) -> surrealdb::Result<Vec<u8>> {
     Ok(db

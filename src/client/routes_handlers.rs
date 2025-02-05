@@ -1,13 +1,13 @@
-use packet_forge::{ChunkRequest, FileHash, Index, MessageType};
+use packet_forge::FileHash;
 
 use crate::db::queries::get_video_content;
 
-use super::{utils::sends::send_msg, video_chunker::get_video_chunks, Client};
+use super::{video_chunker::get_video_chunks, Client};
 
 impl Client {
     async fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
         // Search for the video in the database
-        let video_content = get_video_content(self.db.clone(), video_id).await;
+        let video_content = get_video_content(&self.db, video_id).await;
         let state_guard = self.state.read();
 
         match video_content {
@@ -48,22 +48,6 @@ impl Client {
         None
     }
 
-    pub(crate) fn request_video_from_network(&self, video_id: FileHash) {
-        // Get source and destination id
-        //TODO possible panic if servers_id is empty
-        //TODO this may be a client
-        let dest_id = self.state.read().servers_id[0];
-
-        // Create ChunkRequest
-        let msg = MessageType::ChunkRequest(ChunkRequest::new(self.get_id(), video_id, Index::All));
-
-        // Send message
-        let res = send_msg(&self.state, dest_id, msg);
-        if let Err(err) = res {
-            self.state.read().logger.log_error(&err);
-        }
-    }
-
     pub(crate) async fn request_video(&self, video_id: FileHash) {
         // Search for the video in the database
         if self.get_video_from_db(video_id).await.is_some() {
@@ -71,6 +55,6 @@ impl Client {
         }
 
         // If the video is not found in the database, request it from the network
-        self.request_video_from_network(video_id);
+        self.send_req_peer_list(video_id);
     }
 }

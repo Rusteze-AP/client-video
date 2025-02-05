@@ -1,72 +1,20 @@
-use packet_forge::{FileMetadata, MessageType, SessionIdT, VideoMetaData};
+mod chunk_req_handler;
+mod chunk_res_handler;
+mod res_file_list_handler;
+mod res_peer_list_handler;
+
+use packet_forge::{MessageType, SessionIdT};
 use wg_internal::packet::{Fragment, Packet};
 
-use crate::client::{utils::sends::send_ack, Client, FsmStatus};
+use crate::client::{utils::sends::send_ack, Client};
 
 impl Client {
     fn handle_messages(&self, message: MessageType) {
         match message {
-            MessageType::AckSubscribeClient(content) => {
-                if content.client_id != self.state.read().id {
-                    self.state.read().logger.log_error(&format!(
-                        "[{}, {}] client id mismatch",
-                        file!(),
-                        line!()
-                    ));
-                    return;
-                }
-
-                self.state.read().logger.log_info(&format!(
-                    "[{}, {}] received ack subscribe client",
-                    file!(),
-                    line!()
-                ));
-
-                // Once the client is subscribed, set the FSM to running
-                self.state.write().fsm = FsmStatus::SubscribedToServer;
-            }
-            MessageType::ResponseFileList(content) => {
-                let fsm_state = self.state.read().fsm.clone();
-                if fsm_state == FsmStatus::NotSubscribedToServer {
-                    self.state.write().fsm = FsmStatus::SubscribedToServer;
-                }
-
-                // Convert FileMetadata to VideoMetaData
-                let video_list: Vec<VideoMetaData> = content
-                    .file_list
-                    .iter()
-                    .filter_map(|metadata| {
-                        if let FileMetadata::Video(video) = metadata {
-                            Some(video.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                // Send video metadata to event stream
-                if let Some(sender) = &self.file_list_sender.read().clone() {
-                    let _ = sender.send(video_list);
-                } else {
-                    self.state.read().logger.log_error(&format!(
-                        "[{}, {}] frontend file list sender not found",
-                        file!(),
-                        line!()
-                    ));
-                }
-            }
-            MessageType::ChunkResponse(content) => {
-                // Send data to event stream
-                if let Some(sender) = &self.video_sender.read().clone() {
-                    let _ = sender.send(content.chunk_data);
-                } else {
-                    self.state.read().logger.log_error(&format!(
-                        "[{}, {}] frontend video sender not found",
-                        file!(),
-                        line!()
-                    ));
-                }
-            }
+            MessageType::ResponseFileList(content) => self.handle_response_file_list(&content),
+            MessageType::ChunkResponse(content) => self.handle_chunk_res(content),
+            MessageType::ChunkRequest(content) => self.handle_chunk_req(&content),
+            MessageType::ResponsePeerList(content) => self.handle_peer_list_res(&content),
             _ => {
                 self.state.read().logger.log_error(&format!(
                     "[{}, {}] message not handled: {:?}",
@@ -115,9 +63,9 @@ impl Client {
             // Clone fragments
             let fragments_clone = state.read().packets_map.get(&session_id).cloned();
 
-            if let Some(fragments) = fragments_clone {
+            if let Some(mut fragments) = fragments_clone {
                 // Assemble message using cloned fragments
-                let assembled = match state.read().packet_forge.assemble_dynamic(fragments) {
+                let assembled = match state.read().packet_forge.assemble_dynamic(&mut fragments) {
                     Ok(message) => message,
                     Err(e) => {
                         state.read().logger.log_error(&format!(

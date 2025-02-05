@@ -62,7 +62,15 @@ impl Client {
         };
 
         match nack.nack_type {
-            NackType::Dropped => Self::retransmit_packet(state, packet),
+            NackType::Dropped => {
+                // Update the routing handler
+                self.state
+                    .write()
+                    .routing_handler
+                    .node_nack(packet.routing_header.hops[0]);
+
+                Self::retransmit_packet(state, packet);
+            }
             NackType::DestinationIsDrone => {
                 state.read().logger.log_error(&format!(
                     "[{}, {}] received a Nack with DestinationIsDrone",

@@ -1,4 +1,6 @@
-use packet_forge::{FileMetadata, MessageType, RequestFileList, SubscribeClient};
+use packet_forge::{
+    FileHash, FileMetadata, MessageType, RequestFileList, RequestPeerList, SubscribeClient,
+};
 
 use crate::{
     client::{utils::sends::send_msg, Client, DbT},
@@ -34,10 +36,29 @@ impl Client {
     }
 
     pub(crate) fn send_req_file_list(&self) {
-        println!("Sending request file list");
         // Create a RequestFileList message
         let msg = MessageType::RequestFileList(RequestFileList::new(self.get_id()));
-        //TODO possible panic if servers_id is empty
+
+        if self.state.read().servers_id.is_empty() {
+            self.state.read().logger.log_error(&format!(
+                "[{}, {}] No servers available",
+                file!(),
+                line!()
+            ));
+            return;
+        }
+        let dest_id = self.state.read().servers_id[0];
+
+        // Send message
+        let res = send_msg(&self.state, dest_id, msg);
+        if let Err(err) = res {
+            self.state.read().logger.log_error(&err);
+        }
+    }
+
+    pub(crate) fn send_req_peer_list(&self, video_id: FileHash) {
+        // Create RequestPeerList
+        let msg = MessageType::RequestPeerList(RequestPeerList::new(self.get_id(), video_id));
         let dest_id = self.state.read().servers_id[0];
 
         // Send message
