@@ -75,6 +75,25 @@ impl ClientT for Client {
     fn get_id(&self) -> NodeId {
         self.get_id()
     }
+
+    fn with_info(&self) {
+        self.with_info();
+    }
+    fn with_debug(&self) {
+        self.with_debug();
+    }
+    fn with_error(&self) {
+        self.with_error();
+    }
+    fn with_warning(&self) {
+        self.with_warning();
+    }
+    fn with_all(&self) {
+        self.with_all();
+    }
+    fn with_web_socket(&self) {
+        self.with_web_socket();
+    }
 }
 
 pub(crate) struct ClientState {
@@ -134,7 +153,7 @@ impl Client {
             fsm: FsmStatus::ServerNotFound,
             routing_handler: RoutingHandler::new(),
             packets_history: HashMap::new(),
-            logger: Logger::new(LogLevel::All as u8, false, format!("client-video-{id}")),
+            logger: Logger::new(LogLevel::None as u8, false, format!("client-video-{id}")),
             flood_id: 0,
             client_type: ClientType::Video,
             servers_id: Vec::new(),

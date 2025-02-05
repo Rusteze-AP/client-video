@@ -5,8 +5,8 @@ use super::Client;
 impl Client {
     /// Disable all logs
     /// # Panics
-    /// May panic if the `RwLock` is poisoned
-    pub fn with_info(&self) {
+    /// May panic if the `RwLock` is poisone
+    pub(crate) fn with_info(&self) {
         self.state
             .write()
             .logger
@@ -16,7 +16,7 @@ impl Client {
     /// Enable debug logs
     /// # Panics
     /// May panic if the `RwLock` is poisoned
-    pub fn with_debug(&self) {
+    pub(crate) fn with_debug(&self) {
         self.state
             .write()
             .logger
@@ -26,7 +26,7 @@ impl Client {
     /// Enable error logs
     /// # Panics
     /// May panic if the `RwLock` is poisoned
-    pub fn with_error(&self) {
+    pub(crate) fn with_error(&self) {
         self.state
             .write()
             .logger
@@ -36,7 +36,7 @@ impl Client {
     /// Enable warning logs
     /// # Panics
     /// May panic if the `RwLock` is poisoned
-    pub fn with_warning(&self) {
+    pub(crate) fn with_warning(&self) {
         self.state
             .write()
             .logger
@@ -46,7 +46,7 @@ impl Client {
     /// Enable all logs
     /// # Panics
     /// May panic if the `RwLock` is poisoned
-    pub fn with_all(&self) {
+    pub(crate) fn with_all(&self) {
         self.state
             .write()
             .logger
@@ -56,7 +56,7 @@ impl Client {
     /// Enable logs to be displayed in the console
     /// # Panics
     /// May panic if the `RwLock` is poisoned
-    pub fn with_web_socket(&self) {
+    pub(crate) fn with_web_socket(&self) {
         self.state.write().logger.init_web_socket();
     }
 }
