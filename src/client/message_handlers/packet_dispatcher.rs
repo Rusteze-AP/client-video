@@ -23,7 +23,7 @@ impl Client {
         let session_id = packet.session_id;
         match packet.pack_type.clone() {
             PacketType::MsgFragment(frag) => self.handle_fragment(packet, frag, session_id),
-            PacketType::Ack(ack) => self.handle_ack(&ack, session_id),
+            PacketType::Ack(ack) => self.handle_ack(&packet, &ack, session_id),
             PacketType::Nack(nack) => self.handle_nack(&nack, session_id),
             PacketType::FloodRequest(flood_req) => {
                 // Should not get here, but just in case
