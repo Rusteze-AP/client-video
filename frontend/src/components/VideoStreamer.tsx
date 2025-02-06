@@ -1,18 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import videojs from "video.js";
-import Player from "video.js/dist/types/player";
-import "video.js/dist/video-js.css";
 import { Download, RefreshCw } from "lucide-react";
-
-interface VideoJSOptions {
-    controls: boolean;
-    responsive: boolean;
-    fluid: boolean;
-    sources: {
-        src: string;
-        type: string;
-    }[];
-}
 
 type VideoMetadata = {
     id: number;
@@ -32,7 +19,6 @@ enum FSMStatus {
 
 const VideoStreamer: React.FC = () => {
     const videoRef = useRef<HTMLVideoElement | null>(null);
-    const playerRef = useRef<Player | null>(null);
     const mediaSourceRef = useRef<MediaSource | null>(null);
     const sourceBufferRef = useRef<SourceBuffer | null>(null);
 
@@ -78,12 +64,11 @@ const VideoStreamer: React.FC = () => {
             });
             if (response.ok) {
                 const text = await response.text();
-                // Parse the SSE format
                 const parsedVideos = text
                     .trim()
                     .split("\n")
                     .filter((line) => line.startsWith("data:"))
-                    .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
+                    .map((line) => JSON.parse(line.slice(5)));
 
                 setVideos(parsedVideos);
                 setErrorMessage(null);
@@ -104,12 +89,11 @@ const VideoStreamer: React.FC = () => {
             });
             if (response.ok) {
                 const text = await response.text();
-                // Parse the SSE format
                 const parsedVideos = text
                     .trim()
                     .split("\n")
                     .filter((line) => line.startsWith("data:"))
-                    .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
+                    .map((line) => JSON.parse(line.slice(5)));
 
                 setVideosFromServer(parsedVideos);
                 setErrorMessage(null);
@@ -147,11 +131,9 @@ const VideoStreamer: React.FC = () => {
     }, [fsmStatus]);
 
     useEffect(() => {
-        // Initialize video player
         if (!videoRef.current) return;
 
         requestVideoList();
-        // requestVideoListFromServer();
 
         // New EventSource for video list from server
         const videoListFromServer = new EventSource("/video-list-from-server");
@@ -170,11 +152,10 @@ const VideoStreamer: React.FC = () => {
         const fsmStatusSource = new EventSource("/fsm-status");
         fsmStatusSource.onmessage = function (event) {
             try {
-                // Directly set the FSM status string
                 setFsmStatus(event.data);
             } catch (error) {
                 console.error("Error parsing FSM status:", error);
-                setFsmStatus("Setup"); // Default to Setup on error
+                setFsmStatus("Setup");
                 setErrorMessage("Failed to fetch FSM status");
             }
         };
@@ -182,24 +163,7 @@ const VideoStreamer: React.FC = () => {
         mediaSourceRef.current = new MediaSource();
         const videoURL = URL.createObjectURL(mediaSourceRef.current);
 
-        const videoJsOptions: VideoJSOptions = {
-            controls: true,
-            responsive: true,
-            fluid: true,
-            sources: [
-                {
-                    src: videoURL,
-                    type: "video/mp4",
-                },
-            ],
-        };
-
-        playerRef.current = videojs(videoRef.current, videoJsOptions, function onPlayerReady(this: Player) {
-            this.src({
-                src: videoURL,
-                type: "video/mp4",
-            });
-        });
+        videoRef.current.src = videoURL;
 
         // Handle MediaSource setup
         mediaSourceRef.current.addEventListener("sourceopen", () => {
@@ -240,13 +204,13 @@ const VideoStreamer: React.FC = () => {
 
             // Handle buffer updates
             sourceBufferRef.current?.addEventListener("updateend", () => {
-                if (!sourceBufferRef.current || !playerRef.current) return;
+                if (!sourceBufferRef.current || !videoRef.current) return;
 
                 if (sourceBufferRef.current.buffered.length > 0) {
                     const bufferEnd = sourceBufferRef.current.buffered.end(0);
-                    const currentTime = playerRef.current.currentTime();
+                    const currentTime = videoRef.current.currentTime;
 
-                    if (currentTime !== undefined && bufferEnd - currentTime > 30) {
+                    if (bufferEnd - currentTime > 30) {
                         sourceBufferRef.current.remove(0, currentTime - 10);
                     }
                 }
@@ -255,9 +219,6 @@ const VideoStreamer: React.FC = () => {
 
         // Cleanup
         return () => {
-            if (playerRef.current) {
-                playerRef.current.dispose();
-            }
             if (mediaSourceRef.current?.readyState === "open") {
                 mediaSourceRef.current.endOfStream();
             }
@@ -303,8 +264,7 @@ const VideoStreamer: React.FC = () => {
                         >
                             <RefreshCw size={16} />
                         </button>
-
-                        {/* New API Request */}
+                        {/* Request flooding */}
                         <button
                             onClick={requestFlooding}
                             className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-full text-sm"
@@ -318,13 +278,7 @@ const VideoStreamer: React.FC = () => {
                 <div className="grid md:grid-cols-3 gap-8">
                     {/* Video Player */}
                     <div className="md:col-span-2 rounded-xl overflow-hidden shadow-2xl">
-                        <video
-                            ref={videoRef}
-                            className="video-js vjs-big-play-centered w-full"
-                            controls
-                            preload="auto"
-                            data-setup="{}"
-                        >
+                        <video ref={videoRef} className="w-full bg-black" controls preload="auto">
                             <p className="vjs-no-js">To view this video, please enable JavaScript.</p>
                         </video>
 

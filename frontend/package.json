@@ -11,12 +11,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@types/video.js": "^7.3.58",
     "lucide-react": "^0.474.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "video.js": "^8.21.0",
-    "videojs": "^1.0.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

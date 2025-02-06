@@ -13,7 +13,7 @@ impl Client {
         match video_content {
             Ok(video_content) => {
                 if video_content.is_empty() {
-                    state_guard.logger.log_error(&format!(
+                    state_guard.logger.log_warn(&format!(
                         "[{}, {}] video content is empty",
                         file!(),
                         line!()
