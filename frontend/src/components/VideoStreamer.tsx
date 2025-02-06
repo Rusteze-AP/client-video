@@ -40,6 +40,7 @@ const VideoStreamer: React.FC = () => {
     const [videosFromServer, setVideosFromServer] = useState<VideoMetadata[]>([]);
     const [fsmStatus, setFsmStatus] = useState<string>("Setup");
     const [selectedVideo, setSelectedVideo] = useState<VideoMetadata | null>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
@@ -60,9 +61,13 @@ const VideoStreamer: React.FC = () => {
             });
             if (!response.ok) {
                 console.error("Failed to send message:", response.status);
+                setErrorMessage("Failed to fetch video");
+            } else {
+                setErrorMessage(null);
             }
         } catch (error) {
             console.error("Error sending message:", error);
+            setErrorMessage("Failed to fetch video");
         }
     };
 
@@ -81,11 +86,14 @@ const VideoStreamer: React.FC = () => {
                     .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
 
                 setVideos(parsedVideos);
+                setErrorMessage(null);
             } else {
                 console.error("Failed to fetch videos:", response.status);
+                setErrorMessage("Failed to fetch video list from db");
             }
         } catch (error) {
             console.error("Error sending message:", error);
+            setErrorMessage("Failed to fetch video list from db");
         }
     };
 
@@ -104,11 +112,31 @@ const VideoStreamer: React.FC = () => {
                     .map((line) => JSON.parse(line.slice(5))); // Remove 'data:' prefix
 
                 setVideosFromServer(parsedVideos);
+                setErrorMessage(null);
             } else {
                 console.error("Failed to fetch videos from server:", response.status);
+                setErrorMessage("Failed to fetch video list from server");
             }
         } catch (error) {
             console.error("Error sending message:", error);
+            setErrorMessage("Failed to fetch video list from server");
+        }
+    };
+
+    const requestFlooding = async (): Promise<void> => {
+        try {
+            const response = await fetch("/flood-req", {
+                method: "GET",
+            });
+            if (!response.ok) {
+                console.error("Failed to send message:", response.status);
+                setErrorMessage("Failed to send flood_req");
+            } else {
+                setErrorMessage(null);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+            setErrorMessage("Failed to send flood_req");
         }
     };
 
@@ -134,6 +162,7 @@ const VideoStreamer: React.FC = () => {
             } catch (error) {
                 console.error("Error parsing video list from server:", error);
                 setVideosFromServer([]);
+                setErrorMessage("Failed to fetch video list from server");
             }
         };
 
@@ -146,6 +175,7 @@ const VideoStreamer: React.FC = () => {
             } catch (error) {
                 console.error("Error parsing FSM status:", error);
                 setFsmStatus("Setup"); // Default to Setup on error
+                setErrorMessage("Failed to fetch FSM status");
             }
         };
 
@@ -198,11 +228,13 @@ const VideoStreamer: React.FC = () => {
                     sourceBufferRef.current?.appendBuffer(videoChunk);
                 } catch (error) {
                     console.error("Error processing video chunk:", error);
+                    setErrorMessage("Failed to process video chunk");
                 }
             };
 
             evtSource.onerror = (error: Event) => {
                 console.error("EventSource error:", error);
+                setErrorMessage("Failed to receive video stream");
                 evtSource.close();
             };
 
@@ -236,6 +268,19 @@ const VideoStreamer: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-900 text-white">
             <div className="container mx-auto px-4 py-8">
+                {/* Error popup */}
+                {errorMessage && (
+                    <div className="fixed bottom-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center justify-between space-x-4 w-max">
+                        <p className="text-sm">{errorMessage}</p>
+                        <button
+                            onClick={() => setErrorMessage(null)}
+                            className="text-white font-bold text-lg leading-none"
+                        >
+                            ✖
+                        </button>
+                    </div>
+                )}
+
                 {/* Status Indicator */}
                 <div className="fixed top-4 right-4 z-50">
                     <div className="flex items-center space-x-2 bg-gray-800 rounded-full px-4 py-2 shadow-lg">
@@ -251,11 +296,20 @@ const VideoStreamer: React.FC = () => {
                             }`}
                         />
                         <span className="text-sm font-medium">{fsmStatus}</span>
+                        {/* Refresh Video List */}
                         <button
                             onClick={() => requestVideoListFromServer()}
                             className="text-blue-400 hover:text-blue-300 transition-colors"
                         >
                             <RefreshCw size={16} />
+                        </button>
+
+                        {/* New API Request */}
+                        <button
+                            onClick={requestFlooding}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-full text-sm"
+                        >
+                            Send flood_req
                         </button>
                     </div>
                 </div>

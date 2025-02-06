@@ -11,7 +11,7 @@ use tokio::{sync::broadcast, time::interval};
 
 use crate::db::queries::get_video_list;
 
-use super::Client;
+use super::{utils::start_flooding::init_flood_request, Client};
 
 #[get("/get-id")]
 pub(crate) fn get_id(client: &State<Client>) -> String {
@@ -81,4 +81,9 @@ pub(crate) fn video_list_from_server(client: &State<Client>) -> EventStream![] {
             yield Event::data(json_metadata);
         }
     }
+}
+
+#[get("/flood-req")]
+pub(crate) fn flood_req(client: &State<Client>) {
+    init_flood_request(&client.state);
 }

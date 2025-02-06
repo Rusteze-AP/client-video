@@ -1,7 +1,10 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::{Nack, NackType, Packet};
 
-use crate::client::{utils::sends::send_packet, Client, StateT};
+use crate::client::{
+    utils::{sends::send_packet, start_flooding::init_flood_request},
+    Client, StateT,
+};
 
 impl Client {
     fn retransmit_packet(state: &StateT, mut packet: Packet) {
@@ -71,19 +74,29 @@ impl Client {
 
                 Self::retransmit_packet(state, packet);
             }
-            NackType::DestinationIsDrone => {
-                state.read().logger.log_error(&format!(
-                    "[{}, {}] received a Nack with DestinationIsDrone",
-                    file!(),
-                    line!()
-                ));
-            }
             NackType::ErrorInRouting(id) => {
                 state.read().logger.log_error(&format!(
                     "[{}, {}] received a Nack with ErrorInRouting: {}",
                     file!(),
                     line!(),
                     id
+                ));
+
+                // Remove the server from the list of servers
+                state.write().servers_id.retain(|&x| x != id);
+
+                // Start a new flood_req after a while
+                let state_clone = state.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(10));
+                    init_flood_request(&state_clone);
+                });
+            }
+            NackType::DestinationIsDrone => {
+                state.read().logger.log_error(&format!(
+                    "[{}, {}] received a Nack with DestinationIsDrone",
+                    file!(),
+                    line!()
                 ));
             }
             NackType::UnexpectedRecipient(id) => {

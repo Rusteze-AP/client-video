@@ -26,6 +26,12 @@ fn get_flood_id(state: &StateT) -> u64 {
 }
 
 pub(crate) fn init_flood_request(state: &StateT) {
+    state.read().logger.log_info(&format!(
+        "[{}, {}] starting flood request",
+        file!(),
+        line!()
+    ));
+
     // Get flood rquest data
     let flood_id = get_flood_id(state);
     let id = state.read().id;

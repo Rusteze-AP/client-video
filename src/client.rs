@@ -13,8 +13,8 @@ use parking_lot::RwLock;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
 use routes::{
-    fsm_status, get_id, req_video_list_from_server, request_video, request_video_list_from_db,
-    video_list_from_server, video_stream,
+    flood_req, fsm_status, get_id, req_video_list_from_server, request_video,
+    request_video_list_from_db, video_list_from_server, video_stream,
 };
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
@@ -35,6 +35,7 @@ type DbT = Arc<Surreal<Db>>;
 
 const BASE_DB_PATH: &str = "db/client_video";
 const POPULATE_DB: bool = false;
+const FLOODING_TIMER: u64 = 60; // Timer in seconds for sending flood_req
 
 static RT: LazyLock<tokio::runtime::Runtime> =
     LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());
@@ -217,7 +218,8 @@ impl Client {
                     request_video,
                     request_video_list_from_db,
                     video_list_from_server,
-                    req_video_list_from_server
+                    req_video_list_from_server,
+                    flood_req
                 ],
             )
             .mount("/", FileServer::from(relative!("static")))

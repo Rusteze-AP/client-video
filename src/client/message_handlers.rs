@@ -3,15 +3,17 @@ mod node_messages;
 mod packet_dispatcher;
 
 use crossbeam::channel::TryRecvError;
-use std::thread;
+use std::{thread, time::Duration};
 
-use super::{utils::start_flooding::init_flood_request, Client, FsmStatus, RT};
+use super::{utils::start_flooding::init_flood_request, Client, FsmStatus, FLOODING_TIMER, RT};
 
 impl Client {
+    /// Sends a flood_req every 60 seconds in a separate thread
     fn start_flooding(&self) {
         let state = self.state.clone();
-        thread::spawn(move || {
+        thread::spawn(move || loop {
             init_flood_request(&state);
+            thread::sleep(Duration::from_secs(FLOODING_TIMER));
         });
     }
 

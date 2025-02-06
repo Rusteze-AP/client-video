@@ -5,6 +5,7 @@ use crate::client::Client;
 
 impl Client {
     pub(crate) fn handle_ack(&self, packet: &Packet, ack: &Ack, session_id: SessionIdT) {
+        // Update routing_handler
         self.state
             .write()
             .routing_handler
