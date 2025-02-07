@@ -9,8 +9,6 @@ use rocket::{
 };
 use tokio::{sync::broadcast, time::interval};
 
-use crate::db::queries::get_video_list;
-
 use super::{utils::start_flooding::init_flood_request, Client};
 
 #[get("/get-id")]
@@ -19,13 +17,14 @@ pub(crate) fn get_id(client: &State<Client>) -> String {
 }
 
 #[get("/req-video/<video_id>")]
-pub(crate) async fn request_video(client: &State<Client>, video_id: FileHash) {
-    client.request_video(video_id).await;
+pub(crate) fn request_video(client: &State<Client>, video_id: FileHash) {
+    client.request_video(video_id);
 }
 
 #[get("/req-video-list-from-db")]
-pub(crate) async fn request_video_list_from_db(client: &State<Client>) -> EventStream![] {
-    let videos_info = get_video_list(&client.db).await.unwrap_or_default();
+pub(crate) fn request_video_list_from_db(client: &State<Client>) -> EventStream![] {
+    // let videos_info = get_video_list(&client.db).await.unwrap_or_default();
+    let videos_info = client.db.get_video_list();
 
     EventStream! {
         for video_info in videos_info {

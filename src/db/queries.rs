@@ -1,21 +1,28 @@
-use std::sync::Arc;
-
 use packet_forge::{FileHash, VideoMetaData};
-use surrealdb::{engine::local::Db, Surreal};
 
-use super::structures::Video;
+use super::structures::VideoDb;
 
-pub async fn get_video_list(db: &Arc<Surreal<Db>>) -> surrealdb::Result<Vec<VideoMetaData>> {
-    db.query("SELECT VALUE metadata FROM video").await?.take(0)
-}
+impl VideoDb {
+    pub(crate) fn get_video_list(&self) -> Vec<VideoMetaData> {
+        self.metadata_tree
+            .iter()
+            .filter_map(|entry| {
+                if let Ok((_, data)) = entry {
+                    // Attempt to deserialize the data
+                    return bincode::deserialize::<VideoMetaData>(&data).ok();
+                }
 
-pub async fn get_video_content(
-    db: &Arc<Surreal<Db>>,
-    video_id: FileHash,
-) -> surrealdb::Result<Vec<u8>> {
-    Ok(db
-        .select(("video", video_id.to_string()))
-        .await?
-        .map(|r: Video| r.content)
-        .unwrap_or_default())
+                None
+            })
+            .collect()
+    }
+
+    /// Retrieves video payload from the database by ID.
+    pub(crate) fn get_video_content(&self, id: FileHash) -> Result<Vec<u8>, String> {
+        self.content_tree
+            .get(id.to_be_bytes())
+            .map_err(|e| format!("Error accessing database: {e}"))?
+            .map(|data| data.to_vec())
+            .ok_or_else(|| "Video payload not found".to_string())
+    }
 }

@@ -2,15 +2,12 @@ use packet_forge::{
     FileHash, FileMetadata, MessageType, RequestFileList, RequestPeerList, SubscribeClient,
 };
 
-use crate::{
-    client::{utils::sends::send_msg, Client, DbT},
-    db::queries::get_video_list,
-};
+use crate::client::{utils::sends::send_msg, Client};
 
 impl Client {
-    pub(crate) async fn send_subscribe_client(&self, db: &DbT) {
+    pub(crate) fn send_subscribe_client(&self) {
         // Get available videos from db
-        let videos_info = get_video_list(db).await.unwrap_or_default();
+        let videos_info = self.db.get_video_list();
 
         // Create a vec of FileMetadata::Video
         let mut available_videos = Vec::new();

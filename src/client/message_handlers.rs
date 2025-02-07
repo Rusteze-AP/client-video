@@ -5,10 +5,10 @@ mod packet_dispatcher;
 use crossbeam::channel::TryRecvError;
 use std::{thread, time::Duration};
 
-use super::{utils::start_flooding::init_flood_request, Client, FsmStatus, FLOODING_TIMER, RT};
+use super::{utils::start_flooding::init_flood_request, Client, FsmStatus, FLOODING_TIMER};
 
 impl Client {
-    /// Sends a flood_req every 60 seconds in a separate thread
+    /// Sends a `flood_req` every 60 seconds in a separate thread
     fn start_flooding(&self) {
         let state = self.state.clone();
         thread::spawn(move || loop {
@@ -30,6 +30,7 @@ impl Client {
                     break;
                 }
 
+                // If the client is not subscribed to any server, send a subscribe client message
                 if state.read().fsm == FsmStatus::ServerNotFound
                     && !state.read().servers_id.is_empty()
                 {
@@ -39,7 +40,7 @@ impl Client {
                         line!()
                     ));
 
-                    RT.block_on(self.send_subscribe_client(&self.db));
+                    self.send_subscribe_client();
                     state.write().fsm = FsmStatus::NotSubscribedToServer;
                 }
 

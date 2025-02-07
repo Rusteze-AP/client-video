@@ -19,22 +19,17 @@ use routes::{
 use routing_handler::RoutingHandler;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::Path;
 use std::sync::{Arc, LazyLock};
-use surrealdb::engine::local::{Db, RocksDb};
-use surrealdb::Surreal;
 use tokio::sync::broadcast;
 use wg_internal::controller::{DroneCommand, DroneEvent};
 use wg_internal::network::NodeId;
 use wg_internal::packet::{Fragment, Packet};
 
-use crate::utils::{copy_directory, pupulate_db};
+use crate::db::structures::VideoDb;
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
-type DbT = Arc<Surreal<Db>>;
 
 const BASE_DB_PATH: &str = "db/client_video";
-const POPULATE_DB: bool = false;
 const FLOODING_TIMER: u64 = 180; // Timer in seconds for sending flood_req
 
 static RT: LazyLock<tokio::runtime::Runtime> =
@@ -62,11 +57,11 @@ impl ClientT for Client {
         receiver: Receiver<Packet>,
         senders: HashMap<NodeId, Sender<Packet>>,
     ) -> Self {
-        RT.block_on(async { Self::new(id, command_send, command_recv, receiver, senders).await })
+        Self::new(id, command_send, command_recv, receiver, senders)
     }
 
     fn run(self: Box<Self>, init_client_path: &str) {
-        RT.block_on(async { self.run_internal(init_client_path, POPULATE_DB).await });
+        RT.block_on(async { self.run_internal(init_client_path).await });
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -117,9 +112,9 @@ pub(crate) struct ClientState {
 #[derive(Clone)]
 pub struct Client {
     state: Arc<RwLock<ClientState>>,
-    db: Arc<Surreal<Db>>,
     video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
     file_list_sender: Arc<RwLock<Option<broadcast::Sender<Vec<VideoMetaData>>>>>,
+    db: Arc<VideoDb>,
 }
 
 impl Client {
@@ -127,7 +122,7 @@ impl Client {
     /// Create a new client
     /// # Panics
     /// This function might panic if the `Surreal` instance fails to initialize
-    async fn new(
+    fn new(
         id: NodeId,
         command_send: Sender<DroneEvent>,
         command_recv: Receiver<DroneCommand>,
@@ -135,13 +130,6 @@ impl Client {
         senders: HashMap<NodeId, Sender<Packet>>,
     ) -> Self {
         let client_dir = format!("{BASE_DB_PATH}/client_{id}");
-
-        // Initialize directory db
-        let db = Surreal::new::<RocksDb>(client_dir).await.unwrap();
-        db.use_ns("client_video")
-            .use_db(format!("client_{id}"))
-            .await
-            .unwrap();
 
         let state = ClientState {
             id,
@@ -162,9 +150,9 @@ impl Client {
 
         Client {
             state: Arc::new(RwLock::new(state)),
-            db: Arc::new(db),
             video_sender: Arc::new(RwLock::new(None)),
             file_list_sender: Arc::new(RwLock::new(None)),
+            db: Arc::new(VideoDb::new(&client_dir)),
         }
     }
     /// Get the ID of the client
@@ -173,30 +161,6 @@ impl Client {
     #[must_use]
     pub fn get_id(&self) -> NodeId {
         self.state.read().id
-    }
-
-    async fn init_db(&self, init_client_path: &str, populate_db: bool) {
-        // Copy db to client directory
-        let client_dir = format!("{BASE_DB_PATH}/client_{}", self.state.read().id);
-        let init_db_path = format!("{init_client_path}/db");
-
-        match copy_directory(Path::new(&init_db_path), Path::new(&client_dir)) {
-            Ok(()) => self.state.read().logger.log_info("Database copied"),
-            Err(e) => self
-                .state
-                .read()
-                .logger
-                .log_error(&format!("Failed to copy database from {init_db_path}: {e}")),
-        }
-
-        // Initialize db with some data
-        if populate_db {
-            pupulate_db(&self.db.clone(), init_client_path)
-                .await
-                .unwrap();
-
-            self.state.read().logger.log_info("Database populated");
-        }
     }
 
     #[must_use]
@@ -229,8 +193,13 @@ impl Client {
     /// This function will block the current thread until the Rocket app is shut down
     /// # Errors
     /// If the Rocket app fails to launch
-    async fn run_internal(self, init_client_path: &str, populate_db: bool) {
-        self.init_db(init_client_path, populate_db).await;
+    async fn run_internal(self, init_client_path: &str) {
+        // Initialize the client db
+        let res = self.db.init(init_client_path, Some("video_metadata.json"));
+        if let Err(err) = res {
+            self.state.read().logger.log_error(&err);
+            return;
+        }
 
         let processing_handle = self.clone().start_message_processing();
         let state = self.state.clone();

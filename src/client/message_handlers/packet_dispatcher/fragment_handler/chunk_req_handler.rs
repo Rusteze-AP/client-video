@@ -1,15 +1,14 @@
 use packet_forge::{ChunkRequest, ChunkResponse, MessageType};
 
 use crate::{
-    client::{utils::sends::send_msg, video_chunker::get_video_chunks, RT},
-    db::queries::get_video_content,
+    client::{utils::sends::send_msg, video_chunker::get_video_chunks},
     Client,
 };
 
 impl Client {
     pub(crate) fn handle_chunk_req(&self, content: &ChunkRequest) {
         // Get video from db
-        let res = RT.block_on(get_video_content(&self.db, content.file_hash));
+        let res = self.db.get_video_content(content.file_hash);
         if let Err(err) = res {
             self.state.read().logger.log_error(&format!(
                 "[{}, {}] failed to get video content: {err}",

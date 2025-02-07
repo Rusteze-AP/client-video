@@ -1,13 +1,11 @@
 use packet_forge::FileHash;
 
-use crate::db::queries::get_video_content;
-
 use super::{video_chunker::get_video_chunks, Client};
 
 impl Client {
-    async fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
+    fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
         // Search for the video in the database
-        let video_content = get_video_content(&self.db, video_id).await;
+        let video_content = self.db.get_video_content(video_id);
         let state_guard = self.state.read();
 
         match video_content {
@@ -37,8 +35,8 @@ impl Client {
                 ));
             }
             Err(err) => {
-                state_guard.logger.log_error(&format!(
-                    "[{}, {}] failed to get video content: {err}",
+                state_guard.logger.log_warn(&format!(
+                    "[{}, {}] failed to get video content from db: {err}",
                     file!(),
                     line!()
                 ));
@@ -48,9 +46,9 @@ impl Client {
         None
     }
 
-    pub(crate) async fn request_video(&self, video_id: FileHash) {
+    pub(crate) fn request_video(&self, video_id: FileHash) {
         // Search for the video in the database
-        if self.get_video_from_db(video_id).await.is_some() {
+        if self.get_video_from_db(video_id).is_some() {
             return;
         }
 
