@@ -16,6 +16,15 @@ impl Client {
     }
 
     pub(crate) fn handle_peer_list_res(&self, content: &ResponsePeerList) {
+        if content.peers.is_empty() {
+            self.state.read().logger.log_warn(&format!(
+                "[{}, {}] peer list is empty",
+                file!(),
+                line!()
+            ));
+            return;
+        }
+
         self.request_video_from_network(content.file_hash, content.peers[0].client_id);
     }
 }

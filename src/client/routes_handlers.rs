@@ -50,9 +50,9 @@ impl Client {
 
     pub(crate) async fn request_video(&self, video_id: FileHash) {
         // Search for the video in the database
-        if self.get_video_from_db(video_id).await.is_some() {
-            return;
-        }
+        // if self.get_video_from_db(video_id).await.is_some() {
+        //     return;
+        // }
 
         // If the video is not found in the database, request it from the network
         self.send_req_peer_list(video_id);

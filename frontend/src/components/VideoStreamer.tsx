@@ -88,14 +88,6 @@ const VideoStreamer: React.FC = () => {
                 method: "GET",
             });
             if (response.ok) {
-                const text = await response.text();
-                const parsedVideos = text
-                    .trim()
-                    .split("\n")
-                    .filter((line) => line.startsWith("data:"))
-                    .map((line) => JSON.parse(line.slice(5)));
-
-                setVideosFromServer(parsedVideos);
                 setErrorMessage(null);
             } else {
                 console.error("Failed to fetch videos from server:", response.status);

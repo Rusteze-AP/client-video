@@ -35,7 +35,7 @@ type DbT = Arc<Surreal<Db>>;
 
 const BASE_DB_PATH: &str = "db/client_video";
 const POPULATE_DB: bool = false;
-const FLOODING_TIMER: u64 = 60; // Timer in seconds for sending flood_req
+const FLOODING_TIMER: u64 = 180; // Timer in seconds for sending flood_req
 
 static RT: LazyLock<tokio::runtime::Runtime> =
     LazyLock::new(|| tokio::runtime::Runtime::new().unwrap());

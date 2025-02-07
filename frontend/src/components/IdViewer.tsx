@@ -45,7 +45,7 @@ const IdViewer: React.FC = () => {
 
     return (
         <div className="bg-gray-800 p-4 shadow-md">
-            <h2 className="text-xl font-bold mb-2 text-gray-200">Client Identifier</h2>
+            <h2 className="text-xl font-bold mb-2 text-gray-200">Client Video</h2>
             <div className="flex items-center space-x-2">
                 <div
                     className={`w-3 h-3 rounded-full ${

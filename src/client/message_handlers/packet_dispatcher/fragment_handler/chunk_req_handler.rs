@@ -8,16 +8,6 @@ use crate::{
 
 impl Client {
     pub(crate) fn handle_chunk_req(&self, content: &ChunkRequest) {
-        if content.client_id != self.get_id() {
-            self.state.read().logger.log_error(&format!(
-                "[{}, {}] received a ChunkRequest for client {}",
-                file!(),
-                line!(),
-                content.client_id
-            ));
-            return;
-        }
-
         // Get video from db
         let res = RT.block_on(get_video_content(&self.db, content.file_hash));
         if let Err(err) = res {
