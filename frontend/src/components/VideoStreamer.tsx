@@ -40,19 +40,36 @@ const VideoStreamer: React.FC = () => {
         throw new Error("Unsupported data format");
     };
 
-    const requestVideo = async (video_name: number): Promise<void> => {
+    const requestVideo = async (video_id: number): Promise<void> => {
         try {
-            const response = await fetch(`/req-video/${video_name}`, {
+            // Reset video and buffer
+            if (videoRef.current && mediaSourceRef.current) {
+                videoRef.current.pause();
+                videoRef.current.src = "";
+                mediaSourceRef.current = new MediaSource();
+                const newVideoURL = URL.createObjectURL(mediaSourceRef.current);
+                videoRef.current.src = newVideoURL;
+
+                mediaSourceRef.current.addEventListener("sourceopen", () => {
+                    sourceBufferRef.current = mediaSourceRef.current!.addSourceBuffer(
+                        'video/mp4; codecs="avc1.42E01E,mp4a.40.2"'
+                    );
+                });
+            }
+
+            // Request new video
+            const response = await fetch(`/req-video/${video_id}`, {
                 method: "GET",
             });
+
             if (!response.ok) {
-                console.error("Failed to send message:", response.status);
+                console.error("Failed to fetch video:", response.status);
                 setErrorMessage("Failed to fetch video");
             } else {
                 setErrorMessage(null);
             }
         } catch (error) {
-            console.error("Error sending message:", error);
+            console.error("Error requesting video:", error);
             setErrorMessage("Failed to fetch video");
         }
     };
