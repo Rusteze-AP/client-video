@@ -85,12 +85,7 @@ impl ClientVideo {
                 // Remove the server from the list of servers
                 state.write().servers_id.retain(|&x| x != id);
 
-                // Start a new flood_req after a while
-                let state_clone = state.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(10));
-                    init_flood_request(&state_clone);
-                });
+                init_flood_request(&state);
             }
             NackType::DestinationIsDrone => {
                 state.read().logger.log_error(&format!(
