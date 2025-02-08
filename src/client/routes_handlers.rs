@@ -1,8 +1,8 @@
 use packet_forge::FileHash;
 
-use super::{video_chunker::get_video_chunks, Client};
+use super::{video_chunker::get_video_chunks, ClientVideo};
 
-impl Client {
+impl ClientVideo {
     fn get_video_from_db(&self, video_id: FileHash) -> Option<()> {
         // Search for the video in the database
         let video_content = self.db.get_video_content(video_id);

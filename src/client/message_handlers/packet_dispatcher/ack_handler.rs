@@ -1,9 +1,9 @@
 use packet_forge::SessionIdT;
 use wg_internal::packet::{Ack, Packet};
 
-use crate::client::Client;
+use crate::client::ClientVideo;
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn handle_ack(&self, packet: &Packet, ack: &Ack, session_id: SessionIdT) {
         // Update routing_handler
         self.state

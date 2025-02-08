@@ -6,9 +6,9 @@ mod res_peer_list_handler;
 use packet_forge::{MessageType, SessionIdT};
 use wg_internal::packet::{Fragment, Packet};
 
-use crate::client::{utils::sends::send_ack, Client};
+use crate::client::{utils::sends::send_ack, ClientVideo};
 
-impl Client {
+impl ClientVideo {
     fn handle_messages(&self, message: MessageType) {
         match message {
             MessageType::ResponseFileList(content) => self.handle_response_file_list(&content),

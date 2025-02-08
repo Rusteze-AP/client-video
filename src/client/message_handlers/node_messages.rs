@@ -2,9 +2,9 @@ use packet_forge::{
     FileHash, FileMetadata, MessageType, RequestFileList, RequestPeerList, SubscribeClient,
 };
 
-use crate::client::{utils::sends::send_msg, Client};
+use crate::client::{utils::sends::send_msg, ClientVideo};
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn send_subscribe_client(&self) {
         // Get available videos from db
         let videos_info = self.db.get_video_list();

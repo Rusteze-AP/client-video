@@ -5,9 +5,9 @@ mod nack_handler;
 
 use wg_internal::packet::{Packet, PacketType};
 
-use crate::client::Client;
+use crate::client::ClientVideo;
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn packet_dispatcher(&self, packet: &Packet) {
         if let PacketType::FloodRequest(flood_req) = &packet.pack_type {
             self.handle_flood_req(flood_req);

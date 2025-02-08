@@ -49,7 +49,7 @@ impl Display for FsmStatus {
     }
 }
 
-impl ClientT for Client {
+impl ClientT for ClientVideo {
     fn new(
         id: NodeId,
         command_send: Sender<DroneEvent>,
@@ -110,14 +110,14 @@ pub(crate) struct ClientState {
 }
 
 #[derive(Clone)]
-pub struct Client {
+pub struct ClientVideo {
     state: Arc<RwLock<ClientState>>,
     video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
     file_list_sender: Arc<RwLock<Option<broadcast::Sender<Vec<VideoMetaData>>>>>,
     db: Arc<VideoDb>,
 }
 
-impl Client {
+impl ClientVideo {
     #[must_use]
     /// Create a new client
     /// # Panics
@@ -148,7 +148,7 @@ impl Client {
             servers_id: Vec::new(),
         };
 
-        Client {
+        ClientVideo {
             state: Arc::new(RwLock::new(state)),
             video_sender: Arc::new(RwLock::new(None)),
             file_list_sender: Arc::new(RwLock::new(None)),
@@ -164,7 +164,7 @@ impl Client {
     }
 
     #[must_use]
-    fn configure(client: Client) -> Rocket<Build> {
+    fn configure(client: ClientVideo) -> Rocket<Build> {
         // Config rocket to use a different port for each client
         let config = Config {
             port: 8000 + u16::from(client.get_id()),

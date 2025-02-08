@@ -1,8 +1,8 @@
 use wg_internal::controller::DroneCommand;
 
-use crate::client::{Client, FsmStatus, StateT};
+use crate::client::{ClientVideo, FsmStatus, StateT};
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn command_dispatcher(state: &StateT, command: &DroneCommand) {
         match command {
             DroneCommand::Crash => {

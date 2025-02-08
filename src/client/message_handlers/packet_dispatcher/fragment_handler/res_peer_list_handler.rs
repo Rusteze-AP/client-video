@@ -1,9 +1,9 @@
 use packet_forge::{ChunkRequest, FileHash, Index, MessageType, ResponsePeerList};
 use wg_internal::network::NodeId;
 
-use crate::{client::utils::sends::send_msg, Client};
+use crate::{client::utils::sends::send_msg, ClientVideo};
 
-impl Client {
+impl ClientVideo {
     fn request_video_from_network(&self, video_id: FileHash, dest_id: NodeId) {
         // Create ChunkRequest
         let msg = MessageType::ChunkRequest(ChunkRequest::new(self.get_id(), video_id, Index::All));

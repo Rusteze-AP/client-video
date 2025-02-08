@@ -1,8 +1,8 @@
 use packet_forge::ChunkResponse;
 
-use crate::Client;
+use crate::ClientVideo;
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn handle_chunk_res(&self, content: ChunkResponse) {
         // Send data to event stream
         if let Some(sender) = &self.video_sender.read().clone() {

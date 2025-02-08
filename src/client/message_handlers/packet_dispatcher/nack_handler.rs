@@ -3,10 +3,10 @@ use wg_internal::packet::{Nack, NackType, Packet};
 
 use crate::client::{
     utils::{sends::send_packet, start_flooding::init_flood_request},
-    Client, StateT,
+    ClientVideo, StateT,
 };
 
-impl Client {
+impl ClientVideo {
     fn retransmit_packet(state: &StateT, mut packet: Packet) {
         let dest = packet.routing_header.hops[packet.routing_header.hops.len() - 1];
 

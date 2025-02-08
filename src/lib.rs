@@ -4,4 +4,4 @@ extern crate rocket;
 mod client;
 mod db;
 
-pub use client::*;
+pub use client::ClientVideo;

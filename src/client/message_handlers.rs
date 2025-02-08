@@ -5,9 +5,9 @@ mod packet_dispatcher;
 use crossbeam::channel::TryRecvError;
 use std::{thread, time::Duration};
 
-use super::{utils::start_flooding::init_flood_request, Client, FsmStatus, FLOODING_TIMER};
+use super::{utils::start_flooding::init_flood_request, ClientVideo, FsmStatus, FLOODING_TIMER};
 
-impl Client {
+impl ClientVideo {
     /// Sends a `flood_req` every 60 seconds in a separate thread
     fn start_flooding(&self) {
         let state = self.state.clone();

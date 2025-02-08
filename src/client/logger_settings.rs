@@ -1,8 +1,8 @@
 use logger::LogLevel;
 
-use super::Client;
+use super::ClientVideo;
 
-impl Client {
+impl ClientVideo {
     /// Disable all logs
     /// # Panics
     /// May panic if the `RwLock` is poisone

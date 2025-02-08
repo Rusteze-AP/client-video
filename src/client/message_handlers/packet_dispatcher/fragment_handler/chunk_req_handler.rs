@@ -2,10 +2,10 @@ use packet_forge::{ChunkRequest, ChunkResponse, MessageType};
 
 use crate::{
     client::{utils::sends::send_msg, video_chunker::get_video_chunks},
-    Client,
+    ClientVideo,
 };
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn handle_chunk_req(&self, content: &ChunkRequest) {
         // Get video from db
         let res = self.db.get_video_content(content.file_hash);

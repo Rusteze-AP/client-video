@@ -6,10 +6,10 @@ use wg_internal::{
 
 use crate::client::{
     utils::sends::{send_packet, send_sc_packet},
-    Client,
+    ClientVideo,
 };
 
-impl Client {
+impl ClientVideo {
     pub(crate) fn handle_flood_res(&self, flood_res: &FloodResponse) {
         self.state
             .write()
