@@ -28,6 +28,9 @@ const VideoStreamer: React.FC = () => {
     const [selectedVideo, setSelectedVideo] = useState<VideoMetadata | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+    const chunkQueue: Uint8Array[] = [];
+    let isAppending = false;
+
     const decodeChunk = async (data: string): Promise<Uint8Array> => {
         if (typeof data === "string") {
             const binaryString = atob(data);
@@ -191,17 +194,45 @@ const VideoStreamer: React.FC = () => {
             evtSource.onmessage = async (event: MessageEvent) => {
                 try {
                     const videoChunk = await decodeChunk(event.data);
+                    chunkQueue.push(videoChunk);  // Queue the chunk
+                    processChunkQueue();        // Try to process the queue
+                } catch (error) { /* ... */ }
+            };
 
-                    if (sourceBufferRef.current?.updating) {
+            const processChunkQueue = async () => {
+                if (isAppending || chunkQueue.length === 0 || !sourceBufferRef.current) return;
+            
+                console.log("Processing chunk queue");
+
+                isAppending = true;
+                try {
+                    console.log("Appending chunk");
+                    const chunk = chunkQueue.shift(); // Get the next chunk
+                    if (chunk) {
+                        console.log("Appending chunk 2:", chunk.length);
+                        if (sourceBufferRef.current.updating) {
+                            // Should not happen, but a safeguard
+                            await new Promise<void>((resolve) => {
+                                sourceBufferRef.current?.addEventListener("updateend", () => resolve(), { once: true });
+                            });
+                        }
+
+                        console.log("Appending chunk 3:", chunk.length);
+                        sourceBufferRef.current.appendBuffer(chunk);
+            
                         await new Promise<void>((resolve) => {
                             sourceBufferRef.current?.addEventListener("updateend", () => resolve(), { once: true });
                         });
                     }
-
-                    sourceBufferRef.current?.appendBuffer(videoChunk);
                 } catch (error) {
-                    console.error("Error processing video chunk:", error);
-                    setErrorMessage("Failed to process video chunk");
+                    console.error("Error appending chunk:", error);
+                    setErrorMessage("Failed to append video chunk");
+                    // Handle error:  You might want to clear the queue or close the connection
+                    chunkQueue.length = 0; // Clear the queue to prevent further errors
+                    evtSource.close();       // Close the event source
+                } finally {
+                    isAppending = false;
+                    processChunkQueue(); // Process the next chunk if available
                 }
             };
 

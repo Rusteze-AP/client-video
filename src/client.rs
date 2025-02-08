@@ -61,6 +61,7 @@ impl ClientT for ClientVideo {
     }
 
     fn run(self: Box<Self>, init_client_path: &str) {
+        println!("*********init_client_path: {}", init_client_path);
         RT.block_on(async { self.run_internal(init_client_path).await });
     }
 
