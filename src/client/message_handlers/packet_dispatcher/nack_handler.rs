@@ -82,7 +82,7 @@ impl ClientVideo {
                     id
                 ));
 
-                init_flood_request(&state);
+                init_flood_request(state);
             }
             NackType::DestinationIsDrone => {
                 state.read().logger.log_error(&format!(

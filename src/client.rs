@@ -114,7 +114,7 @@ pub(crate) struct ClientState {
 pub struct ClientVideo {
     state: Arc<RwLock<ClientState>>,
     video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
-    file_list_sender: Arc<RwLock<Option<broadcast::Sender<VideoListSenderT>>>,>,
+    file_list_sender: Arc<RwLock<Option<broadcast::Sender<VideoListSenderT>>>>,
     db: Arc<VideoDb>,
 }
 

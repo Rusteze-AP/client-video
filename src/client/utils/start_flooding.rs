@@ -8,17 +8,6 @@ use crate::client::StateT;
 
 use super::sends::{send_packet, send_sc_packet};
 
-/// Returns the `PacketType` formatted as a `String`
-// fn get_packet_type(pt: &PacketType) -> String {
-//     match pt {
-//         PacketType::Ack(_) => "Ack".to_string(),
-//         PacketType::Nack(_) => "Nack".to_string(),
-//         PacketType::FloodRequest(_) => "Flood request".to_string(),
-//         PacketType::FloodResponse(_) => "Flood response".to_string(),
-//         PacketType::MsgFragment(_) => "Fragment".to_string(),
-//     }
-// }
-
 /// Returns the next `flood_id` and increments the current one
 fn get_flood_id(state: &StateT) -> u64 {
     state.write().flood_id += 1;
