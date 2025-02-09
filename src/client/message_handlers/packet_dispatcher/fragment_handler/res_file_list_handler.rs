@@ -33,7 +33,7 @@ impl ClientVideo {
         if let Some(sender) = &self.file_list_sender.read().clone() {
             let _ = sender.send((content.server_id, video_list));
         } else {
-            self.state.read().logger.log_error(&format!(
+            self.state.read().logger.log_warn(&format!(
                 "[{}, {}] frontend file list sender not found",
                 file!(),
                 line!()
