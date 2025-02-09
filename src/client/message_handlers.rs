@@ -31,18 +31,18 @@ impl ClientVideo {
                 }
 
                 // If the client is not subscribed to any server, send a subscribe client message
-                if state.read().fsm == FsmStatus::ServerNotFound
-                    && !state.read().servers_id.is_empty()
-                {
-                    state.read().logger.log_info(&format!(
-                        "[{}, {}] sending subscribe client message",
-                        file!(),
-                        line!()
-                    ));
+                // if state.read().fsm == FsmStatus::ServerNotFound
+                //     && !state.read().servers_id.is_empty()
+                // {
+                //     state.read().logger.log_info(&format!(
+                //         "[{}, {}] sending subscribe client message",
+                //         file!(),
+                //         line!()
+                //     ));
 
-                    self.send_subscribe_client();
-                    state.write().fsm = FsmStatus::NotSubscribedToServer;
-                }
+                //     self.send_subscribe_client();
+                //     state.write().fsm = FsmStatus::NotSubscribedToServer;
+                // }
 
                 let controller_recv = state.read().controller_recv.clone();
                 match controller_recv.try_recv() {

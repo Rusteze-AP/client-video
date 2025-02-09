@@ -22,9 +22,16 @@ impl ClientVideo {
             })
             .collect();
 
+        // Add video ids to the server id map
+        let video_ids: Vec<u16> = video_list.iter().map(|video| video.id).collect();
+        self.state
+            .write()
+            .servers
+            .insert(content.server_id, video_ids);
+
         // Send video metadata to event stream
         if let Some(sender) = &self.file_list_sender.read().clone() {
-            let _ = sender.send(video_list);
+            let _ = sender.send((content.server_id, video_list));
         } else {
             self.state.read().logger.log_error(&format!(
                 "[{}, {}] frontend file list sender not found",

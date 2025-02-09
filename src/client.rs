@@ -8,7 +8,7 @@ mod video_chunker;
 use bytes::Bytes;
 use crossbeam::channel::{Receiver, Sender};
 use logger::{LogLevel, Logger};
-use packet_forge::{ClientT, ClientType, PacketForge, SessionIdT, VideoMetaData};
+use packet_forge::{ClientT, ClientType, FileHash, PacketForge, SessionIdT, VideoMetaData};
 use parking_lot::RwLock;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Config, Rocket};
@@ -28,6 +28,7 @@ use wg_internal::packet::{Fragment, Packet};
 use crate::db::structures::VideoDb;
 
 type StateT<'a> = Arc<RwLock<ClientState>>;
+type VideoListSenderT = (NodeId, Vec<VideoMetaData>);
 
 const BASE_DB_PATH: &str = "db/client_video";
 const FLOODING_TIMER: u64 = 180; // Timer in seconds for sending flood_req
@@ -106,14 +107,14 @@ pub(crate) struct ClientState {
     logger: Logger,
     flood_id: u64,
     client_type: ClientType,
-    servers_id: Vec<NodeId>,
+    servers: HashMap<NodeId, Vec<FileHash>>,
 }
 
 #[derive(Clone)]
 pub struct ClientVideo {
     state: Arc<RwLock<ClientState>>,
     video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
-    file_list_sender: Arc<RwLock<Option<broadcast::Sender<Vec<VideoMetaData>>>>>,
+    file_list_sender: Arc<RwLock<Option<broadcast::Sender<VideoListSenderT>>>,>,
     db: Arc<VideoDb>,
 }
 
@@ -145,7 +146,7 @@ impl ClientVideo {
             logger: Logger::new(LogLevel::None as u8, false, format!("client-video-{id}")),
             flood_id: 0,
             client_type: ClientType::Video,
-            servers_id: Vec::new(),
+            servers: HashMap::new(),
         };
 
         ClientVideo {

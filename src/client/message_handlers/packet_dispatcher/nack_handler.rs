@@ -82,9 +82,6 @@ impl ClientVideo {
                     id
                 ));
 
-                // Remove the server from the list of servers
-                state.write().servers_id.retain(|&x| x != id);
-
                 init_flood_request(&state);
             }
             NackType::DestinationIsDrone => {

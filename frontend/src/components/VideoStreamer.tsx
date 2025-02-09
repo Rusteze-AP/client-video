@@ -10,6 +10,11 @@ type VideoMetadata = {
     created_at: string;
 };
 
+type ServerVideos = {
+    serverId: number;
+    videos: VideoMetadata[];
+};
+
 enum FSMStatus {
     ServerNotFound = "ServerNotFound",
     NotSubscribedToServer = "NotSubscribedToServer",
@@ -23,7 +28,7 @@ const VideoStreamer: React.FC = () => {
     const sourceBufferRef = useRef<SourceBuffer | null>(null);
 
     const [videos, setVideos] = useState<VideoMetadata[]>([]);
-    const [videosFromServer, setVideosFromServer] = useState<VideoMetadata[]>([]);
+    const [videosFromServer, setVideosFromServer] = useState<ServerVideos[]>([]);
     const [fsmStatus, setFsmStatus] = useState<string>("Setup");
     const [selectedVideo, setSelectedVideo] = useState<VideoMetadata | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -151,8 +156,20 @@ const VideoStreamer: React.FC = () => {
         const videoListFromServer = new EventSource("/video-list-from-server");
         videoListFromServer.onmessage = function (event) {
             try {
-                const data = JSON.parse(event.data);
-                setVideosFromServer(data);
+                const data: [number, VideoMetadata[]] = JSON.parse(event.data);
+                const serverId = data[0];
+                const videos = data[1];
+
+                setVideosFromServer((prev) => {
+                    const existingIndex = prev.findIndex((entry) => entry.serverId === serverId);
+                    if (existingIndex !== -1) {
+                        const updated = [...prev];
+                        updated[existingIndex] = { serverId, videos };
+                        return updated;
+                    } else {
+                        return [...prev, { serverId, videos }];
+                    }
+                });
             } catch (error) {
                 console.error("Error parsing video list from server:", error);
                 setVideosFromServer([]);
@@ -194,14 +211,16 @@ const VideoStreamer: React.FC = () => {
             evtSource.onmessage = async (event: MessageEvent) => {
                 try {
                     const videoChunk = await decodeChunk(event.data);
-                    chunkQueue.push(videoChunk);  // Queue the chunk
-                    processChunkQueue();        // Try to process the queue
-                } catch (error) { /* ... */ }
+                    chunkQueue.push(videoChunk); // Queue the chunk
+                    processChunkQueue(); // Try to process the queue
+                } catch (error) {
+                    /* ... */
+                }
             };
 
             const processChunkQueue = async () => {
                 if (isAppending || chunkQueue.length === 0 || !sourceBufferRef.current) return;
-            
+
                 console.log("Processing chunk queue");
 
                 isAppending = true;
@@ -219,7 +238,7 @@ const VideoStreamer: React.FC = () => {
 
                         console.log("Appending chunk 3:", chunk.length);
                         sourceBufferRef.current.appendBuffer(chunk);
-            
+
                         await new Promise<void>((resolve) => {
                             sourceBufferRef.current?.addEventListener("updateend", () => resolve(), { once: true });
                         });
@@ -229,7 +248,7 @@ const VideoStreamer: React.FC = () => {
                     setErrorMessage("Failed to append video chunk");
                     // Handle error:  You might want to clear the queue or close the connection
                     chunkQueue.length = 0; // Clear the queue to prevent further errors
-                    evtSource.close();       // Close the event source
+                    evtSource.close(); // Close the event source
                 } finally {
                     isAppending = false;
                     processChunkQueue(); // Process the next chunk if available
@@ -351,16 +370,26 @@ const VideoStreamer: React.FC = () => {
 
                         <div>
                             <h2 className="text-2xl font-bold mb-4 text-gray-200">Server Videos</h2>
-                            <div className="space-y-4">
-                                {videosFromServer.map((video) => (
-                                    <VideoCard
-                                        key={video.id}
-                                        video={video}
-                                        onSelect={() => {
-                                            setSelectedVideo(video);
-                                            requestVideo(video.id);
-                                        }}
-                                    />
+                            <div className="space-y-6">
+                                {videosFromServer.map(({ serverId, videos }) => (
+                                    <div key={serverId} className="border border-gray-600 p-4 rounded-lg">
+                                        <h3 className="text-xl font-semibold text-gray-300">Server {serverId}</h3>
+                                        <div className="space-y-4 mt-2">
+                                            {videos.map((video) => (
+                                                <VideoCard
+                                                    key={video.id}
+                                                    video={video}
+                                                    onSelect={() => {
+                                                        setSelectedVideo(video);
+                                                        requestVideo(video.id);
+                                                    }}
+                                                />
+                                            ))}
+                                            {videos.length === 0 && (
+                                                <p className="text-gray-500 text-center">No videos from this server</p>
+                                            )}
+                                        </div>
+                                    </div>
                                 ))}
                                 {videosFromServer.length === 0 && (
                                     <p className="text-gray-500 text-center">No server videos</p>

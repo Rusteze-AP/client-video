@@ -2,12 +2,14 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose, Engine};
 use bytes::Bytes;
-use packet_forge::{FileHash, VideoMetaData};
+use packet_forge::FileHash;
 use rocket::{
     response::stream::{Event, EventStream},
     State,
 };
 use tokio::{sync::broadcast, time::interval};
+
+use crate::client::VideoListSenderT;
 
 use super::{utils::start_flooding::init_flood_request, ClientVideo};
 
@@ -55,6 +57,7 @@ pub(crate) fn fsm_status(client: &State<ClientVideo>) -> EventStream![] {
 
 #[get("/video-stream")]
 pub(crate) fn video_stream(client: &State<ClientVideo>) -> EventStream![] {
+    // Create broadcast channel
     let (sender, _) = broadcast::channel::<Bytes>(1024);
     *client.video_sender.write() = Some(sender.clone());
     let mut receiver = sender.subscribe();
@@ -69,7 +72,8 @@ pub(crate) fn video_stream(client: &State<ClientVideo>) -> EventStream![] {
 
 #[get("/video-list-from-server")]
 pub(crate) fn video_list_from_server(client: &State<ClientVideo>) -> EventStream![] {
-    let (sender, _) = broadcast::channel::<Vec<VideoMetaData>>(10);
+    // Create broadcast channel
+    let (sender, _) = broadcast::channel::<VideoListSenderT>(10);
     *client.file_list_sender.write() = Some(sender.clone());
     let mut receiver = sender.subscribe();
 

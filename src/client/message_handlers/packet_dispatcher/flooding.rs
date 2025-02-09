@@ -6,7 +6,7 @@ use wg_internal::{
 
 use crate::client::{
     utils::sends::{send_packet, send_sc_packet},
-    ClientVideo,
+    ClientVideo, FsmStatus,
 };
 
 impl ClientVideo {
@@ -15,9 +15,18 @@ impl ClientVideo {
             .write()
             .routing_handler
             .update_graph(flood_res.clone());
+
         for (id, node_type) in &flood_res.path_trace {
-            if *node_type == NodeType::Server && !self.state.read().servers_id.contains(id) {
-                self.state.write().servers_id.push(*id);
+            // If node is Server and not in the list, add it
+            if *node_type == NodeType::Server && !self.state.read().servers.contains_key(id) {
+                self.state.write().servers.insert(*id, Vec::new());
+                self.send_subscribe_client(*id);
+
+                let fsm = self.state.read().fsm.clone();
+                if fsm == FsmStatus::ServerNotFound {
+                    self.state.write().fsm = FsmStatus::NotSubscribedToServer;
+                }
+
                 self.state.read().logger.log_info(&format!(
                     "[{}, {}] added server id: {}",
                     file!(),
