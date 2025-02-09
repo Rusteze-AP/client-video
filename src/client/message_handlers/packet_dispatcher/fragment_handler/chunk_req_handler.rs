@@ -21,8 +21,20 @@ impl ClientVideo {
 
         // Split the video into chunks
         let video_chunks = get_video_chunks(res);
-        let total_n_chunks = video_chunks.len() as u32;
 
+        // Get the total number of chunks
+        let total_n_chunks = u32::try_from(video_chunks.len());
+        if let Err(e) = total_n_chunks {
+            self.state.read().logger.log_error(&format!(
+                "[{}, {}] failed to convert len to u32: {e:?}",
+                file!(),
+                line!()
+            ));
+            return;
+        }
+        let total_n_chunks = total_n_chunks.unwrap();
+
+        // Send each chunk
         for (i, chunk) in video_chunks.enumerate() {
             let Ok(chunk_index) = u32::try_from(i) else {
                 self.state.read().logger.log_error(&format!(

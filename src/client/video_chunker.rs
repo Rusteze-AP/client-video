@@ -65,7 +65,10 @@ impl Iterator for ChunkIterator {
 
 impl ExactSizeIterator for ChunkIterator {
     fn len(&self) -> usize {
-        (self.chunker.data_size as usize + self.chunker.chunk_size - 1) / self.chunker.chunk_size
+        match usize::try_from(self.chunker.data_size) {
+            Ok(data_size) => data_size.div_ceil(self.chunker.chunk_size),
+            Err(_) => 0,
+        }
     }
 }
 

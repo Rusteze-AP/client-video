@@ -23,9 +23,6 @@ impl ClientVideo {
             available_videos,
         ));
 
-        // Get source and destination id
-        // let dest_id = self.state.read().servers_id[0];
-
         // Send message
         let res = send_msg(&self.state, dest_id, msg);
         if let Err(err) = res {
@@ -52,7 +49,18 @@ impl ClientVideo {
         for dest_id in servers.keys() {
             // Send message
             let res = send_msg(&self.state, *dest_id, msg.clone());
+            // If send failed, send to frontend an empty list
             if let Err(err) = res {
+                if let Some(sender) = &self.file_list_sender.read().clone() {
+                    let _ = sender.send((*dest_id, Vec::new()));
+                } else {
+                    self.state.read().logger.log_error(&format!(
+                        "[{}, {}] frontend file list sender not found",
+                        file!(),
+                        line!()
+                    ));
+                }
+
                 self.state.read().logger.log_error(&err);
             }
         }

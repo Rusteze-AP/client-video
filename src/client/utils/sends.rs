@@ -2,7 +2,7 @@ use crossbeam::channel::Sender;
 use packet_forge::MessageType;
 use wg_internal::{controller::DroneEvent, network::NodeId, packet::Packet};
 
-use crate::client::StateT;
+use crate::client::{FsmStatus, StateT};
 
 /// Send a `Packet` to a client and update the history
 pub fn send_packet(state: &StateT, sender: &Sender<Packet>, packet: &Packet) -> Result<(), String> {
@@ -51,7 +51,14 @@ pub fn send_sc_packet(state: &StateT, drone_event: &DroneEvent) -> Result<(), St
 pub fn send_msg(state: &StateT, dest_id: NodeId, msg: MessageType) -> Result<(), String> {
     let source_id = state.read().id;
     let srh = state.write().routing_handler.best_path(source_id, dest_id);
+    // If srh is None, remove dest_id if is a server
     if srh.is_none() {
+        state.write().servers.remove(&dest_id);
+        let servers_is_empty = state.read().servers.is_empty();
+        if servers_is_empty {
+            state.write().fsm = FsmStatus::ServerNotFound;
+        }
+
         return Err(format!("[{}, {}] best_path failed", file!(), line!()));
     }
     let srh = srh.unwrap();
