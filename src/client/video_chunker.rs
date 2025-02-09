@@ -8,6 +8,10 @@ pub struct VideoChunker {
     data_size: u64,
 }
 
+pub struct ChunkIterator {
+    chunker: VideoChunker,
+}
+
 impl VideoChunker {
     pub fn new(video_data: Vec<u8>, chunk_size: usize) -> Self {
         let data_size = video_data.len() as u64;
@@ -46,25 +50,27 @@ impl VideoChunker {
     }
 }
 
-pub fn get_video_chunks(video_data: Vec<u8>) -> impl Iterator<Item = Bytes> {
-    struct ChunkIterator {
-        chunker: VideoChunker,
-    }
+impl Iterator for ChunkIterator {
+    type Item = Bytes;
 
-    impl Iterator for ChunkIterator {
-        type Item = Bytes;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if let Ok(Some(chunk)) = self.chunker.next_chunk() {
-                Some(chunk)
-            } else {
-                self.chunker.reset();
-                None
-            }
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Ok(Some(chunk)) = self.chunker.next_chunk() {
+            Some(chunk)
+        } else {
+            self.chunker.reset();
+            None
         }
     }
+}
 
-    // Create the chunker with a 1MB chunk size
-    let chunker = VideoChunker::new(video_data, 1024 * 1024);
+impl ExactSizeIterator for ChunkIterator {
+    fn len(&self) -> usize {
+        (self.chunker.data_size as usize + self.chunker.chunk_size - 1) / self.chunker.chunk_size
+    }
+}
+
+pub fn get_video_chunks(video_data: Vec<u8>) -> ChunkIterator {
+    // Create the chunker with a 65KB chunk size
+    let chunker = VideoChunker::new(video_data, 256 * 256);
     ChunkIterator { chunker }
 }

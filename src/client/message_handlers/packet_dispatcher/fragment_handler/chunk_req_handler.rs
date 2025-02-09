@@ -21,6 +21,7 @@ impl ClientVideo {
 
         // Split the video into chunks
         let video_chunks = get_video_chunks(res);
+        let total_n_chunks = video_chunks.len() as u32;
 
         for (i, chunk) in video_chunks.enumerate() {
             let Ok(chunk_index) = u32::try_from(i) else {
@@ -37,6 +38,7 @@ impl ClientVideo {
             let chunk_res = MessageType::ChunkResponse(ChunkResponse::new(
                 content.file_hash,
                 chunk_index,
+                total_n_chunks,
                 chunk.clone(),
             ));
 

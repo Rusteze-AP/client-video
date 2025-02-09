@@ -52,6 +52,10 @@ impl ClientVideo {
             return;
         }
 
+        // Clear the chunk buffer and reset the next expected index
+        self.chunk_buffer.write().clear();
+        *self.next_expected_index.write() = 0;
+
         // If the video is not found in the database, request it from the network
         self.send_req_peer_list(video_id);
     }

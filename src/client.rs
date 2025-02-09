@@ -17,7 +17,7 @@ use routes::{
     request_video_list_from_db, video_list_from_server, video_stream,
 };
 use routing_handler::RoutingHandler;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Display;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::broadcast;
@@ -113,9 +113,11 @@ pub(crate) struct ClientState {
 #[derive(Clone)]
 pub struct ClientVideo {
     state: Arc<RwLock<ClientState>>,
-    video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>,
-    file_list_sender: Arc<RwLock<Option<broadcast::Sender<VideoListSenderT>>>>,
+    video_sender: Arc<RwLock<Option<broadcast::Sender<Bytes>>>>, // Frontend sender for video chunks
+    file_list_sender: Arc<RwLock<Option<broadcast::Sender<VideoListSenderT>>>>, // Frontend sender for video list
     db: Arc<VideoDb>,
+    chunk_buffer: Arc<RwLock<BTreeMap<u32, Bytes>>>, // Store out-of-order chunks
+    next_expected_index: Arc<RwLock<u32>>,           // Track next expected chunk
 }
 
 impl ClientVideo {
@@ -154,6 +156,8 @@ impl ClientVideo {
             video_sender: Arc::new(RwLock::new(None)),
             file_list_sender: Arc::new(RwLock::new(None)),
             db: Arc::new(VideoDb::new(&client_dir)),
+            chunk_buffer: Arc::new(RwLock::new(BTreeMap::new())),
+            next_expected_index: Arc::new(RwLock::new(0)),
         }
     }
     /// Get the ID of the client
