@@ -1,10 +1,17 @@
+use std::time::{Duration, Instant};
+
 use packet_forge::SessionIdT;
+use parking_lot::Mutex;
 use wg_internal::packet::{Nack, NackType, Packet};
 
 use crate::client::{
     utils::{sends::send_packet, start_flooding::init_flood_request},
     ClientVideo, StateT,
 };
+
+lazy_static::lazy_static! {
+    static ref LAST_EXECUTION: Mutex<Instant> = Mutex::new(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
+}
 
 impl ClientVideo {
     fn retransmit_packet(state: &StateT, mut packet: Packet) {
@@ -82,7 +89,18 @@ impl ClientVideo {
                     id
                 ));
 
-                init_flood_request(state);
+                // Send flood request after a certain time window
+                let mut last_exec = LAST_EXECUTION.lock();
+                let now = Instant::now();
+                if now.duration_since(*last_exec) > Duration::from_secs(5) {
+                    *last_exec = now;
+                    init_flood_request(state);
+                } else {
+                    state
+                        .read()
+                        .logger
+                        .log_error("Skipping flood request to avoid overloading.");
+                }
             }
             NackType::DestinationIsDrone => {
                 state.read().logger.log_error(&format!(
