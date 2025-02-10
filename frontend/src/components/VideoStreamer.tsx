@@ -240,7 +240,7 @@ const VideoStreamer: React.FC = () => {
                     }
                 } catch (error) {
                     console.error("Error appending chunk:", error);
-                    setErrorMessage("Failed to append video chunk");
+                    // setErrorMessage("Failed to append video chunk");
                     chunkQueue.length = 0; // Clear the queue to prevent further errors
                     // evtSource.close(); // Close the event source
                 } finally {
